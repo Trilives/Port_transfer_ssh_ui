@@ -13,14 +13,16 @@
 ## 项目结构
 
 ```text
-frontend/                 React + TypeScript + Tailwind UI
-frontend/src/App.tsx      主界面、连接管理、设置、说明页和弹窗
-frontend/src/api.ts       Tauri command 调用封装
-frontend/src/components   本地 UI 基础组件
-frontend/src/i18n.ts      中文/英文界面文案
-src-tauri/                Tauri + Rust 后端
-src-tauri/src/lib.rs      配置、日志、SSH 进程、Tauri commands
-src-tauri/src/main.rs     程序入口和 askpass helper 入口
+frontend/                      React + TypeScript + Tailwind UI
+frontend/src/App.tsx           主界面、连接管理、设置、说明页和弹窗
+frontend/src/api.ts            Tauri command 调用封装
+frontend/src/components        本地 UI 基础组件
+frontend/src/components/dialogs.tsx  密码、公钥上传、严重错误等弹窗
+frontend/src/pages/GuidePage.tsx     使用向导页面
+frontend/src/i18n.ts           中文/英文界面文案
+src-tauri/                     Tauri + Rust 后端
+src-tauri/src/lib.rs           配置、日志、SSH 进程、公钥上传、配置校验、Tauri commands
+src-tauri/src/main.rs          程序入口和 askpass helper 入口
 ```
 
 旧的 Python/Tkinter 原型和 uv 环境已经移除。
@@ -33,6 +35,8 @@ Rust 后端负责：
 - 读取和保存主题、语言、日志等级等设置。
 - 调用系统 `ssh.exe` 启动 Local / Remote / Dynamic 转发。
 - 管理 SSH 子进程的连接、断开、全部断开和自动重连。
+- 在保存连接前校验 SSH 配置参数（主机、端口、转发地址等）。
+- 一键把本地公钥上传到远程主机的 `authorized_keys`，配置免密登录。
 - 通过 `SSH_ASKPASS` 实现一次性密码连接。
 - 在 Windows 下使用 `CREATE_NO_WINDOW` 启动 SSH 子进程，避免连接时弹出终端窗口。
 - 在应用退出时清理所有由本程序启动的 SSH 转发进程。
@@ -91,10 +95,14 @@ npm.cmd run tauri:dev
 
 ## 打包
 
+打包需要在**项目根目录**运行，Tauri CLI 才能找到 `src-tauri/tauri.conf.json`：
+
 ```powershell
 $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
-npm.cmd run tauri:build
+.\frontend\node_modules\.bin\tauri.cmd build
 ```
+
+`beforeBuildCommand` 会自动先执行前端构建（`npm.cmd --prefix frontend run build`），无需手动构建前端。
 
 成功后生成：
 
@@ -116,7 +124,13 @@ src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.1_x64-setup.exe
 发布说明可参考：
 
 ```text
-首次发布：
+v0.1.1 更新：
+- 新增一键上传 SSH 公钥到远程主机，快速配置免密登录。
+- 新增公钥上传、密码输入、严重错误对话框。
+- 新增使用向导页面。
+- 保存连接前校验 SSH 配置参数。
+
+首次发布（v0.1.0）：
 - 可视化管理 SSH 端口转发。
 - 支持历史连接、连接管理、配置弹窗和主页面快捷操作。
 - 支持 Local / Remote / Dynamic 转发模式。
@@ -124,6 +138,10 @@ src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.1_x64-setup.exe
 - Windows 下隐藏 SSH 子进程终端窗口。
 - 应用退出时自动清理当前转发连接。
 ```
+
+## 开源协议
+
+本项目采用 MIT 协议，详见仓库根目录 [LICENSE](LICENSE)。
 
 ## 仓库
 
