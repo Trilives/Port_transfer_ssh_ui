@@ -339,6 +339,139 @@ fn upload_public_key(
 }
 
 #[tauri::command]
+fn probe_connection(id: String, state: State<AppState>, app: AppHandle) -> Result<String, String> {
+    let profile = state
+        .profiles
+        .lock()
+        .map_err(lock_error)?
+        .iter()
+        .find(|item| item.id == id)
+        .cloned()
+        .ok_or_else(|| "Profile not found.".to_string())?;
+    validate_ssh_profile(&profile)?;
+
+    let command = build_probe_command(&profile);
+    state.add_log("debug", format!("[{}] probe $ {}", profile.name, command.join(" ")), Some(&app));
+    let mut process = Command::new(&command[0]);
+    process
+        .args(&command[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    process.creation_flags(CREATE_NO_WINDOW);
+    let output = process.output().map_err(|err| err.to_string())?;
+    if output.status.success() {
+        return Ok("ready".to_string());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let lower = stderr.to_lowercase();
+    if lower.contains("remote host identification has changed")
+        || lower.contains("host key verification failed")
+    {
+        return Ok("host_key_changed".to_string());
+    }
+    if lower.contains("permission denied")
+        || lower.contains("publickey")
+        || lower.contains("no supported authentication")
+    {
+        return Ok("password_required".to_string());
+    }
+    Err(format!("Cannot reach host: {}", stderr.trim()))
+}
+
+#[tauri::command]
+fn get_host_fingerprint(id: String, state: State<AppState>, _app: AppHandle) -> Result<String, String> {
+    let profile = state
+        .profiles
+        .lock()
+        .map_err(lock_error)?
+        .iter()
+        .find(|item| item.id == id)
+        .cloned()
+        .ok_or_else(|| "Profile not found.".to_string())?;
+    validate_ssh_profile(&profile)?;
+    let port = empty_default(&profile.ssh_port, "22");
+    let host = profile.ssh_host.trim();
+
+    let mut scan = Command::new("ssh-keyscan");
+    scan.args(["-p", port, host])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(target_os = "windows")]
+    scan.creation_flags(CREATE_NO_WINDOW);
+    let scan_output = scan.output().map_err(|err| err.to_string())?;
+    if scan_output.stdout.is_empty() {
+        return Err("Cannot fetch host key.".to_string());
+    }
+
+    let mut keygen = Command::new("ssh-keygen");
+    keygen
+        .args(["-l", "-f", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    keygen.creation_flags(CREATE_NO_WINDOW);
+    let mut child = keygen.spawn().map_err(|err| err.to_string())?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin.write_all(&scan_output.stdout).map_err(|err| err.to_string())?;
+    }
+    let output = child.wait_with_output().map_err(|err| err.to_string())?;
+    let fingerprint = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if fingerprint.is_empty() {
+        return Err("Cannot compute host key fingerprint.".to_string());
+    }
+    Ok(fingerprint)
+}
+
+#[tauri::command]
+fn remove_known_host(id: String, state: State<AppState>, app: AppHandle) -> Result<(), String> {
+    let profile = state
+        .profiles
+        .lock()
+        .map_err(lock_error)?
+        .iter()
+        .find(|item| item.id == id)
+        .cloned()
+        .ok_or_else(|| "Profile not found.".to_string())?;
+    let host = profile.ssh_host.trim().to_string();
+    if host.is_empty() {
+        return Err("SSH host is required.".to_string());
+    }
+    let port = empty_default(&profile.ssh_port, "22").to_string();
+    let mut targets = vec![host.clone()];
+    if port != "22" {
+        targets.push(format!("[{host}]:{port}"));
+    }
+    for target in targets {
+        let mut keygen = Command::new("ssh-keygen");
+        keygen
+            .args(["-R", &target])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+        #[cfg(target_os = "windows")]
+        keygen.creation_flags(CREATE_NO_WINDOW);
+        match keygen.output() {
+            Ok(_) => state.add_log(
+                "info",
+                format!("[{}] removed old host key for {}", profile.name, target),
+                Some(&app),
+            ),
+            Err(err) => state.add_log(
+                "warning",
+                format!("[{}] ssh-keygen -R {} failed: {}", profile.name, target, err),
+                Some(&app),
+            ),
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn disconnect_profile(id: String, state: State<AppState>, app: AppHandle) -> Result<TunnelProfileView, String> {
     let profile = state
         .profiles
@@ -711,6 +844,34 @@ fn build_key_upload_command(profile: &TunnelProfile) -> Result<Vec<String>, Stri
     Ok(command)
 }
 
+fn build_probe_command(profile: &TunnelProfile) -> Vec<String> {
+    let destination = if profile.ssh_user.trim().is_empty() {
+        profile.ssh_host.trim().to_string()
+    } else {
+        format!("{}@{}", profile.ssh_user.trim(), profile.ssh_host.trim())
+    };
+    let mut command = vec![
+        "ssh".to_string(),
+        "-T".to_string(),
+        "-o".to_string(),
+        "BatchMode=yes".to_string(),
+        "-o".to_string(),
+        "ConnectTimeout=8".to_string(),
+        "-o".to_string(),
+        "NumberOfPasswordPrompts=0".to_string(),
+        "-o".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
+        "-p".to_string(),
+        empty_default(&profile.ssh_port, "22").to_string(),
+    ];
+    if !profile.identity_file.trim().is_empty() {
+        command.extend(["-i".to_string(), profile.identity_file.trim().to_string()]);
+    }
+    command.push(destination);
+    command.push("exit 0".to_string());
+    command
+}
+
 fn build_ssh_command(profile: &TunnelProfile) -> Result<Vec<String>, String> {
     let ssh = "ssh".to_string();
     let destination = if profile.ssh_user.trim().is_empty() {
@@ -861,6 +1022,9 @@ pub fn run() {
             connect_profile,
             connect_profile_with_password,
             upload_public_key,
+            probe_connection,
+            get_host_fingerprint,
+            remove_known_host,
             disconnect_profile,
             disconnect_all,
             get_settings,

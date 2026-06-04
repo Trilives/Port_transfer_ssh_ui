@@ -6,7 +6,7 @@ import { Button } from "./components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Select } from "./components/ui/select";
-import { CriticalErrorDialog as CriticalErrorDialogPanel, KeyUploadDialog as KeyUploadDialogPanel, PasswordDialog as PasswordDialogPanel } from "./components/dialogs";
+import { CriticalErrorDialog as CriticalErrorDialogPanel, HostKeyChangedDialog as HostKeyChangedDialogPanel, KeyUploadDialog as KeyUploadDialogPanel, PasswordDialog as PasswordDialogPanel } from "./components/dialogs";
 import { languageLabels, t } from "./i18n";
 import { cn } from "./lib/utils";
 import { GuidePage as GuidePagePanel } from "./pages/GuidePage";
@@ -50,10 +50,14 @@ export function App() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [passwordTarget, setPasswordTarget] = useState<TunnelProfile | null>(null);
   const [passwordValue, setPasswordValue] = useState("");
   const [keyUploadTarget, setKeyUploadTarget] = useState<TunnelProfile | null>(null);
   const [keyUploadPassword, setKeyUploadPassword] = useState("");
+  const [hostKeyTarget, setHostKeyTarget] = useState<{ profile: TunnelProfile; action: "connect" | "upload" } | null>(null);
+  const [hostKeyFingerprint, setHostKeyFingerprint] = useState("");
+  const [hostKeyFetching, setHostKeyFetching] = useState(false);
   const [criticalError, setCriticalError] = useState<CriticalErrorPayload | null>(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const shownCriticalErrors = useRef(new Set<string>());
@@ -132,20 +136,32 @@ export function App() {
 
   async function connect(id = selectedId) {
     if (!id) return;
+    setError("");
+    setNotice(t(language, "detectingConnection"));
     try {
+      const status = await api.probeConnection(id);
+      if (status === "host_key_changed") {
+        setNotice("");
+        const profile = profiles.find((item) => item.id === id);
+        if (profile) await openHostKeyDialog(profile, "connect");
+        return;
+      }
+      if (status === "password_required") {
+        setNotice("");
+        const profile = profiles.find((item) => item.id === id);
+        if (profile) {
+          setPasswordTarget(profile);
+          setPasswordValue("");
+        }
+        return;
+      }
       await api.connectProfile(id);
+      setNotice("");
       await refreshProfiles();
       setPage("main");
     } catch (err) {
+      setNotice("");
       setError(String(err));
-    }
-  }
-
-  function requestPasswordConnect(id = selectedId) {
-    const profile = profiles.find((item) => item.id === id);
-    if (profile) {
-      setPasswordTarget(profile);
-      setPasswordValue("");
     }
   }
 
@@ -163,11 +179,57 @@ export function App() {
     }
   }
 
-  function requestKeyUpload(id = selectedId) {
+  async function requestKeyUpload(id = selectedId) {
     const profile = profiles.find((item) => item.id === id);
-    if (profile) {
+    if (!profile) return;
+    setError("");
+    setNotice(t(language, "detectingConnection"));
+    try {
+      const status = await api.probeConnection(id);
+      if (status === "ready") {
+        setNotice(t(language, "keyUploadNotNeeded"));
+        return;
+      }
+      if (status === "host_key_changed") {
+        setNotice("");
+        await openHostKeyDialog(profile, "upload");
+        return;
+      }
+      setNotice("");
       setKeyUploadTarget(profile);
       setKeyUploadPassword("");
+    } catch (err) {
+      setNotice("");
+      setError(String(err));
+    }
+  }
+
+  async function openHostKeyDialog(profile: TunnelProfile, action: "connect" | "upload") {
+    setHostKeyTarget({ profile, action });
+    setHostKeyFingerprint("");
+    setHostKeyFetching(true);
+    try {
+      setHostKeyFingerprint(await api.getHostFingerprint(profile.id));
+    } catch {
+      setHostKeyFingerprint("");
+    } finally {
+      setHostKeyFetching(false);
+    }
+  }
+
+  async function trustHostKeyAndRetry() {
+    if (!hostKeyTarget) return;
+    const { profile, action } = hostKeyTarget;
+    setHostKeyTarget(null);
+    try {
+      await api.removeKnownHost(profile.id);
+      if (action === "connect") {
+        await connect(profile.id);
+      } else {
+        await requestKeyUpload(profile.id);
+      }
+    } catch (err) {
+      setError(String(err));
     }
   }
 
@@ -258,6 +320,12 @@ export function App() {
               {error}
             </div>
           )}
+          {notice && (
+            <div className="mb-4 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <CheckCircle2 size={16} />
+              {notice}
+            </div>
+          )}
           <div className="animate-[fadeIn_220ms_ease-out]">
             {page === "main" && (
               <MainPage
@@ -268,7 +336,6 @@ export function App() {
                 onSelect={selectProfile}
                 onNew={openNewProfileDialog}
                 onConnect={() => connect()}
-                onPasswordConnect={() => requestPasswordConnect()}
                 onKeyUpload={() => requestKeyUpload()}
                 onDisconnect={() => disconnect()}
                 onDisconnectAll={async () => {
@@ -291,7 +358,6 @@ export function App() {
                   setProfileDialogOpen(true);
                 }}
                 onConnect={connect}
-                onPasswordConnect={requestPasswordConnect}
                 onKeyUpload={requestKeyUpload}
                 onDisconnect={disconnect}
                 onDelete={removeProfile}
@@ -316,20 +382,11 @@ export function App() {
               await connect(saved.id);
             }
           }}
-          onPasswordConnect={async () => {
-            const saved = await saveDraft();
-            if (saved) {
-              setProfileDialogOpen(false);
-              setPasswordTarget(saved);
-              setPasswordValue("");
-            }
-          }}
           onKeyUpload={async () => {
             const saved = await saveDraft();
             if (saved) {
               setProfileDialogOpen(false);
-              setKeyUploadTarget(saved);
-              setKeyUploadPassword("");
+              await requestKeyUpload(saved.id);
             }
           }}
           onDisconnect={() => disconnect(draft.id)}
@@ -361,6 +418,16 @@ export function App() {
           onSubmit={uploadKeyWithPassword}
         />
       )}
+      {hostKeyTarget && (
+        <HostKeyChangedDialogPanel
+          language={language}
+          profileName={hostKeyTarget.profile.name}
+          fingerprint={hostKeyFingerprint}
+          fetching={hostKeyFetching}
+          onCancel={() => setHostKeyTarget(null)}
+          onTrust={trustHostKeyAndRetry}
+        />
+      )}
       {criticalError && (
         <CriticalErrorDialogPanel
           language={language}
@@ -380,7 +447,6 @@ function MainPage(props: {
   onSelect: (profile: TunnelProfile) => void;
   onNew: () => void;
   onConnect: () => void;
-  onPasswordConnect: () => void;
   onKeyUpload: () => void;
   onDisconnect: () => void;
   onDisconnectAll: () => void;
@@ -407,10 +473,6 @@ function MainPage(props: {
             <Button onClick={props.onConnect}>
               <Plug size={16} />
               {t(props.language, "connectSelected")}
-            </Button>
-            <Button variant="secondary" onClick={props.onPasswordConnect}>
-              <KeyRound size={16} />
-              {t(props.language, "connectWithPassword")}
             </Button>
             <Button variant="secondary" onClick={props.onKeyUpload}>
               <KeyRound size={16} />
@@ -444,7 +506,6 @@ function ProfileDialog(props: {
   onNew: () => void;
   onSave: () => void;
   onConnect: () => void;
-  onPasswordConnect: () => void;
   onKeyUpload: () => void;
   onDisconnect: () => void;
 }) {
@@ -496,7 +557,6 @@ function ProfileDialog(props: {
           <Button variant="secondary" onClick={props.onNew}>{t(props.language, "new")}</Button>
           <Button variant="secondary" onClick={props.onSave}>{t(props.language, "save")}</Button>
           <Button onClick={props.onConnect}>{t(props.language, "connect")}</Button>
-          <Button variant="secondary" onClick={props.onPasswordConnect}>{t(props.language, "connectWithPassword")}</Button>
           <Button variant="secondary" onClick={props.onKeyUpload}>{props.language === "zh-CN" ? "\u4e0a\u4f20\u5bc6\u94a5" : "Upload Key"}</Button>
           <Button variant="secondary" onClick={props.onDisconnect}>{t(props.language, "disconnect")}</Button>
         </div>
@@ -540,7 +600,6 @@ function HistoryPage(props: {
   onNew: () => void;
   onEdit: (profile: TunnelProfile) => void;
   onConnect: (id: string) => void;
-  onPasswordConnect: (id: string) => void;
   onKeyUpload: (id: string) => void;
   onDisconnect: (id: string) => void;
   onDelete: (id: string) => void;
@@ -570,7 +629,6 @@ function HistoryPage(props: {
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={() => props.onEdit(profile)}>{t(props.language, "config")}</Button>
             <Button variant="ghost" onClick={() => props.onConnect(profile.id)}>{t(props.language, "connect")}</Button>
-            <Button variant="ghost" onClick={() => props.onPasswordConnect(profile.id)}>{t(props.language, "connectWithPassword")}</Button>
             <Button variant="ghost" onClick={() => props.onKeyUpload(profile.id)}>{props.language === "zh-CN" ? "\u4e0a\u4f20\u5bc6\u94a5" : "Upload Key"}</Button>
             <Button variant="ghost" onClick={() => props.onDisconnect(profile.id)}>{t(props.language, "disconnect")}</Button>
             <Button variant="danger" onClick={() => props.onDelete(profile.id)}>

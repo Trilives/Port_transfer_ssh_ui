@@ -93,6 +93,42 @@ export function KeyUploadDialog(props: {
   );
 }
 
+export function HostKeyChangedDialog(props: {
+  language: Language;
+  profileName: string;
+  fingerprint: string;
+  fetching: boolean;
+  onCancel: () => void;
+  onTrust: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-lg border-amber-300 bg-white dark:border-amber-800 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>⚠️ {t(props.language, "hostKeyChangedTitle")}</CardTitle>
+          <CardDescription>
+            {props.profileName} — {t(props.language, "hostKeyChangedWarn")}
+          </CardDescription>
+        </CardHeader>
+        <div className="grid gap-3">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+            {t(props.language, "hostKeyFingerprintLabel")}
+          </p>
+          <pre className="max-h-40 overflow-auto rounded-2xl bg-slate-100 p-4 text-xs leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {props.fetching
+              ? t(props.language, "hostKeyFetching")
+              : props.fingerprint || t(props.language, "hostKeyUnavailable")}
+          </pre>
+          <div className="flex justify-end gap-3">
+            <Button onClick={props.onCancel}>{t(props.language, "cancel")}</Button>
+            <Button variant="danger" onClick={props.onTrust}>{t(props.language, "hostKeyTrust")}</Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export function CriticalErrorDialog(props: {
   language: Language;
   error: CriticalErrorPayload;

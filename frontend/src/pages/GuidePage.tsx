@@ -7,12 +7,12 @@ export function GuidePage(props: { language: Language }) {
   const isZh = props.language === "zh-CN";
   const quickSteps = isZh
     ? [
-        ["1", "\u65b0\u5efa\u8fde\u63a5", "\u8fdb\u5165\u8fde\u63a5\u7ba1\u7406\u6216\u4e3b\u9875\u9762\uff0c\u70b9\u51fb\u65b0\u5efa\uff0c\u6253\u5f00\u914d\u7f6e\u5f39\u7a97\u3002"],
+        ["1", "\u65b0\u5efa\u8fde\u63a5", "\u8fdb\u5165\u914d\u7f6e\u6216\u4e3b\u9875\u9762\uff0c\u70b9\u51fb\u65b0\u5efa\uff0c\u6253\u5f00\u914d\u7f6e\u5f39\u7a97\u3002"],
         ["2", "\u586b\u5199\u53c2\u6570", "\u9009\u62e9 Local/Remote/Dynamic\uff0c\u586b SSH \u4e3b\u673a\u3001\u7528\u6237\u3001\u76d1\u542c\u7aef\u53e3\u548c\u76ee\u6807\u5730\u5740\u3002"],
         ["3", "\u5f00\u59cb\u8fde\u63a5", "\u70b9\u51fb\u8fde\u63a5\u540e\u4f1a\u4fdd\u5b58\u914d\u7f6e\u3001\u5173\u95ed\u5f39\u7a97\uff0c\u5e76\u56de\u5230\u4e3b\u9875\u9762\u67e5\u770b\u72b6\u6001\u548c\u65e5\u5fd7\u3002"],
       ]
     : [
-        ["1", "Create", "Open Connection Management or Main, then click New to open the profile popup."],
+        ["1", "Create", "Open Profiles or Main, then click New to open the profile popup."],
         ["2", "Fill", "Choose Local/Remote/Dynamic, then fill SSH host, user, bind port, and target."],
         ["3", "Connect", "Connect saves the profile, closes the popup, and returns to Main for status and logs."],
       ];
@@ -46,13 +46,13 @@ export function GuidePage(props: { language: Language }) {
   const pageCards = isZh
     ? [
         ["\u4e3b\u9875\u9762", "\u67e5\u770b\u5f53\u524d\u8fde\u63a5\u3001\u8fd0\u884c\u72b6\u6001\u548c\u65e5\u5fd7\u3002\u70b9\u51fb\u4e00\u6761\u8bb0\u5f55\u53ef\u9009\u4e2d\uff0c\u518d\u70b9\u4e00\u6b21\u53ef\u53d6\u6d88\u9009\u4e2d\u3002"],
-        ["\u8fde\u63a5\u7ba1\u7406", "\u7a0b\u5e8f\u9ed8\u8ba4\u6253\u5f00\u6b64\u9875\u3002\u65b0\u5efa\u3001\u914d\u7f6e\u3001\u8fde\u63a5\u3001\u4e0a\u4f20\u5bc6\u94a5\u548c\u5220\u9664\u90fd\u5728\u8fd9\u91cc\u3002"],
+        ["\u914d\u7f6e", "\u7a0b\u5e8f\u9ed8\u8ba4\u6253\u5f00\u6b64\u9875\u3002\u65b0\u5efa\u3001\u914d\u7f6e\u7aef\u53e3\u3001\u8fde\u63a5\u3001\u4e0a\u4f20\u5bc6\u94a5\u548c\u5220\u9664\u90fd\u5728\u8fd9\u91cc\u3002"],
         ["\u914d\u7f6e\u5f39\u7a97", "\u586b\u5199\u6216\u4fee\u6539 SSH \u4e0e\u7aef\u53e3\u8f6c\u53d1\u53c2\u6570\u3002\u70b9\u51fb\u8fde\u63a5\u4f1a\u81ea\u52a8\u4fdd\u5b58\u5e76\u56de\u5230\u4e3b\u9875\u9762\u3002"],
         ["\u8bbe\u7f6e", "\u5207\u6362 dark/light \u4e3b\u9898\u3001\u754c\u9762\u8bed\u8a00\u548c\u65e5\u5fd7\u7b49\u7ea7\u3002Debug \u9002\u5408\u6392\u67e5\u8fde\u63a5\u5931\u8d25\u3002"],
       ]
     : [
         ["Main", "Inspect current connections, status, and logs. Click a row to select it, then click again to clear selection."],
-        ["Connection Management", "The app opens here by default. Create, configure, connect, upload keys, and delete saved profiles here."],
+        ["Profiles", "The app opens here by default. Create, configure, connect, upload keys, and delete saved profiles here."],
         ["Profile Popup", "Fill or edit SSH and forwarding parameters. Connect saves the profile and returns to Main."],
         ["Settings", "Switch dark/light theme, language, and log level. Debug is useful for connection troubleshooting."],
       ];
@@ -71,14 +71,16 @@ export function GuidePage(props: { language: Language }) {
 
   const tips = isZh
     ? [
-        "\u9996\u6b21\u8fde\u63a5\u4e3b\u673a\u65f6\uff0c\u7a0b\u5e8f\u4f7f\u7528 OpenSSH \u7684 accept-new \u7b56\u7565\uff1a\u9996\u6b21\u6307\u7eb9\u4f1a\u81ea\u52a8\u52a0\u5165 known_hosts\uff0c\u4f46\u6307\u7eb9\u53d8\u5316\u4f1a\u88ab\u62d2\u7edd\u3002",
-        "\u5982\u679c\u9700\u8981\u5148\u914d\u7f6e\u5bc6\u94a5\u767b\u5f55\uff0c\u70b9\u51fb\u4e0a\u4f20\u5bc6\u94a5\uff0c\u8f93\u5165\u4e00\u6b21 SSH \u5bc6\u7801\u5373\u53ef\u5199\u5165\u8fdc\u7aef authorized_keys\u3002",
+        "\u70b9\u51fb\u8fde\u63a5\u4f1a\u81ea\u52a8\u5224\u65ad\u8ba4\u8bc1\u65b9\u5f0f\uff1a\u80fd\u514d\u5bc6\u5219\u76f4\u63a5\u8fde\u63a5\uff1b\u9700\u8981\u5bc6\u7801\u65f6\u4f1a\u81ea\u52a8\u5f39\u51fa\u5bc6\u7801\u8f93\u5165\u6846\u3002",
+        "\u70b9\u51fb\u4e0a\u4f20\u5bc6\u94a5\u4f1a\u5148\u68c0\u6d4b\u662f\u5426\u5df2\u80fd\u514d\u5bc6\u76f4\u8fde\uff1a\u82e5\u5df2\u53ef\u76f4\u8fde\u4f1a\u63d0\u793a\u65e0\u9700\u4e0a\u4f20\uff0c\u5426\u5219\u8f93\u5165\u4e00\u6b21 SSH \u5bc6\u7801\u5373\u53ef\u5199\u5165\u8fdc\u7aef authorized_keys\u3002",
+        "\u9996\u6b21\u8fde\u63a5\u4e3b\u673a\u4f7f\u7528 OpenSSH accept-new\uff1a\u9996\u6b21\u6307\u7eb9\u81ea\u52a8\u52a0\u5165 known_hosts\uff1b\u82e5\u6307\u7eb9\u53d1\u751f\u53d8\u5316\uff0c\u8fde\u63a5\u4f1a\u88ab\u62d2\u7edd\u5e76\u5f39\u7a97\uff0c\u7531\u4f60\u6838\u5bf9\u6307\u7eb9\u540e\u51b3\u5b9a\u662f\u5426\u4fe1\u4efb\u65b0\u5bc6\u94a5\u5e76\u91cd\u8bd5\u3002",
         "\u8fde\u63a5\u51fa\u73b0\u5173\u952e\u9519\u8bef\u65f6\u4f1a\u5f39\u7a97\u63d0\u793a\u4e00\u6b21\uff0c\u8be5\u8fde\u63a5\u4f1a\u505c\u6b62\u81ea\u52a8\u91cd\u8bd5\u3002",
         "\u5173\u95ed\u5e94\u7528\u65f6\uff0c\u7a0b\u5e8f\u4f1a\u81ea\u52a8\u6e05\u7406\u7531\u5b83\u542f\u52a8\u7684 SSH \u8f6c\u53d1\u8fdb\u7a0b\u3002",
       ]
     : [
-        "For first-time hosts, the app uses OpenSSH accept-new: new host keys are added automatically, but changed host keys are rejected.",
-        "Use Upload Key with a one-time SSH password to append your public key to remote authorized_keys.",
+        "Connecting auto-detects the auth method: it connects directly when key auth works, or pops up a password prompt when a password is needed.",
+        "Upload Key first checks for passwordless access: if the host already connects without a password it tells you no upload is needed; otherwise enter the SSH password once to append your public key to remote authorized_keys.",
+        "First-time hosts use OpenSSH accept-new: new host keys are added to known_hosts automatically; if a host key changes the connection is refused and a dialog asks you to verify the fingerprint before trusting the new key and retrying.",
         "Critical connection errors show one dismissible dialog and stop automatic retries for that tunnel.",
         "When the app exits, SSH forwarding processes started by the app are cleaned up automatically.",
       ];

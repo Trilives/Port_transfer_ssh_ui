@@ -36,8 +36,10 @@ Rust 后端负责：
 - 调用系统 `ssh.exe` 启动 Local / Remote / Dynamic 转发。
 - 管理 SSH 子进程的连接、断开、全部断开和自动重连。
 - 在保存连接前校验 SSH 配置参数（主机、端口、转发地址等）。
+- 连接前用 `BatchMode=yes` 探测（`probe_connection`），区分「可免密直连 / 需要密码 / 主机指纹变化 / 不可达」，由前端据此自动直连、弹密码框或弹指纹变化提示。
+- 指纹变化时提供 `get_host_fingerprint`（`ssh-keyscan` + `ssh-keygen -lf`）展示新指纹，并提供 `remove_known_host`（`ssh-keygen -R`）在用户确认后移除旧记录再重试。
 - 一键把本地公钥上传到远程主机的 `authorized_keys`，配置免密登录。
-- 通过 `SSH_ASKPASS` 实现一次性密码连接。
+- 通过 `SSH_ASKPASS` 实现自动弹出的一次性密码连接。
 - 在 Windows 下使用 `CREATE_NO_WINDOW` 启动 SSH 子进程，避免连接时弹出终端窗口。
 - 在应用退出时清理所有由本程序启动的 SSH 转发进程。
 
@@ -108,22 +110,29 @@ $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
 
 ```text
 src-tauri\target\release\ssh-port-forwarder.exe
-src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.1_x64-setup.exe
+src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.2_x64-setup.exe
 ```
 
-## 发布 v0.1.1
+## 发布 v0.1.2
 
 建议发布内容：
 
-- Git tag：`v0.1.1`
-- Release title：`SSH Port Forwarder v0.1.1`
+- Git tag：`v0.1.2`
+- Release title：`SSH Port Forwarder v0.1.2`
 - Release asset：
   - `ssh-port-forwarder.exe`
-  - `SSH Port Forwarder_0.1.1_x64-setup.exe`
+  - `SSH Port Forwarder_0.1.2_x64-setup.exe`
 
 发布说明可参考：
 
 ```text
+v0.1.2 更新：
+- 连接时自动判断认证方式：能免密直连就直接连接，需要密码时自动弹窗输入。
+- 移除手动「输入密码连接」按钮，改为自动判断。
+- 检测到远程主机指纹变化时弹窗提示，由用户核对后决定是否信任新密钥并重试。
+- 上传公钥前先检测是否已可免密直连，可直连时提示并取消。
+- 主界面导航「历史连接」改名为「配置」。
+
 v0.1.1 更新：
 - 新增一键上传 SSH 公钥到远程主机，快速配置免密登录。
 - 新增公钥上传、密码输入、严重错误对话框。
