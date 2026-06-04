@@ -1,15 +1,24 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { Activity, BookOpen, CheckCircle2, History, KeyRound, Plug, Settings, SlidersHorizontal, Terminal, Trash2, X } from "lucide-react";
 import { api } from "./api";
 import { Button } from "./components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Select } from "./components/ui/select";
+import { CriticalErrorDialog as CriticalErrorDialogPanel, KeyUploadDialog as KeyUploadDialogPanel, PasswordDialog as PasswordDialogPanel } from "./components/dialogs";
 import { languageLabels, t } from "./i18n";
 import { cn } from "./lib/utils";
+import { GuidePage as GuidePagePanel } from "./pages/GuidePage";
 import type { AppSettings, Language, LogEntry, LogLevel, ThemeName, TunnelMode, TunnelProfile } from "./types";
 
 type Page = "main" | "settings" | "history" | "guide";
+
+type CriticalErrorPayload = {
+  id: string;
+  name: string;
+  message: string;
+};
 
 const defaultProfile = (): TunnelProfile => ({
   id: crypto.randomUUID(),
@@ -43,7 +52,11 @@ export function App() {
   const [error, setError] = useState("");
   const [passwordTarget, setPasswordTarget] = useState<TunnelProfile | null>(null);
   const [passwordValue, setPasswordValue] = useState("");
+  const [keyUploadTarget, setKeyUploadTarget] = useState<TunnelProfile | null>(null);
+  const [keyUploadPassword, setKeyUploadPassword] = useState("");
+  const [criticalError, setCriticalError] = useState<CriticalErrorPayload | null>(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const shownCriticalErrors = useRef(new Set<string>());
 
   const selected = useMemo(() => profiles.find((item) => item.id === selectedId), [profiles, selectedId]);
   const language = settings.language;
@@ -51,6 +64,18 @@ export function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.theme === "dark");
   }, [settings.theme]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<CriticalErrorPayload>("critical-error", (event) => {
+      if (shownCriticalErrors.current.has(event.payload.id)) return;
+      shownCriticalErrors.current.add(event.payload.id);
+      setCriticalError(event.payload);
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => unlisten?.();
+  }, []);
 
   useEffect(() => {
     void refreshAll();
@@ -133,6 +158,27 @@ export function App() {
       setProfileDialogOpen(false);
       await refreshProfiles();
       setPage("main");
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  function requestKeyUpload(id = selectedId) {
+    const profile = profiles.find((item) => item.id === id);
+    if (profile) {
+      setKeyUploadTarget(profile);
+      setKeyUploadPassword("");
+    }
+  }
+
+  async function uploadKeyWithPassword() {
+    if (!keyUploadTarget || !keyUploadPassword) return;
+    try {
+      await api.uploadPublicKey(keyUploadTarget.id, keyUploadPassword);
+      setKeyUploadTarget(null);
+      setKeyUploadPassword("");
+      await refreshProfiles();
+      setError("");
     } catch (err) {
       setError(String(err));
     }
@@ -223,6 +269,7 @@ export function App() {
                 onNew={openNewProfileDialog}
                 onConnect={() => connect()}
                 onPasswordConnect={() => requestPasswordConnect()}
+                onKeyUpload={() => requestKeyUpload()}
                 onDisconnect={() => disconnect()}
                 onDisconnectAll={async () => {
                   await api.disconnectAll();
@@ -245,11 +292,12 @@ export function App() {
                 }}
                 onConnect={connect}
                 onPasswordConnect={requestPasswordConnect}
+                onKeyUpload={requestKeyUpload}
                 onDisconnect={disconnect}
                 onDelete={removeProfile}
               />
             )}
-            {page === "guide" && <CleanGuidePage language={language} />}
+            {page === "guide" && <GuidePagePanel language={language} />}
           </div>
         </section>
       </div>
@@ -276,11 +324,19 @@ export function App() {
               setPasswordValue("");
             }
           }}
+          onKeyUpload={async () => {
+            const saved = await saveDraft();
+            if (saved) {
+              setProfileDialogOpen(false);
+              setKeyUploadTarget(saved);
+              setKeyUploadPassword("");
+            }
+          }}
           onDisconnect={() => disconnect(draft.id)}
         />
       )}
       {passwordTarget && (
-        <PasswordDialog
+        <PasswordDialogPanel
           language={language}
           profileName={passwordTarget.name}
           password={passwordValue}
@@ -290,6 +346,26 @@ export function App() {
             setPasswordValue("");
           }}
           onSubmit={connectWithPassword}
+        />
+      )}
+      {keyUploadTarget && (
+        <KeyUploadDialogPanel
+          language={language}
+          profileName={keyUploadTarget.name}
+          password={keyUploadPassword}
+          setPassword={setKeyUploadPassword}
+          onCancel={() => {
+            setKeyUploadTarget(null);
+            setKeyUploadPassword("");
+          }}
+          onSubmit={uploadKeyWithPassword}
+        />
+      )}
+      {criticalError && (
+        <CriticalErrorDialogPanel
+          language={language}
+          error={criticalError}
+          onClose={() => setCriticalError(null)}
         />
       )}
     </main>
@@ -305,6 +381,7 @@ function MainPage(props: {
   onNew: () => void;
   onConnect: () => void;
   onPasswordConnect: () => void;
+  onKeyUpload: () => void;
   onDisconnect: () => void;
   onDisconnectAll: () => void;
 }) {
@@ -335,6 +412,10 @@ function MainPage(props: {
               <KeyRound size={16} />
               {t(props.language, "connectWithPassword")}
             </Button>
+            <Button variant="secondary" onClick={props.onKeyUpload}>
+              <KeyRound size={16} />
+              {props.language === "zh-CN" ? "\u4e0a\u4f20\u5bc6\u94a5" : "Upload Key"}
+            </Button>
             <Button variant="secondary" onClick={props.onDisconnect}>
               {t(props.language, "disconnectSelected")}
             </Button>
@@ -364,6 +445,7 @@ function ProfileDialog(props: {
   onSave: () => void;
   onConnect: () => void;
   onPasswordConnect: () => void;
+  onKeyUpload: () => void;
   onDisconnect: () => void;
 }) {
   const update = <K extends keyof TunnelProfile>(key: K, value: TunnelProfile[K]) => props.setDraft({ ...props.draft, [key]: value });
@@ -415,6 +497,7 @@ function ProfileDialog(props: {
           <Button variant="secondary" onClick={props.onSave}>{t(props.language, "save")}</Button>
           <Button onClick={props.onConnect}>{t(props.language, "connect")}</Button>
           <Button variant="secondary" onClick={props.onPasswordConnect}>{t(props.language, "connectWithPassword")}</Button>
+          <Button variant="secondary" onClick={props.onKeyUpload}>{props.language === "zh-CN" ? "\u4e0a\u4f20\u5bc6\u94a5" : "Upload Key"}</Button>
           <Button variant="secondary" onClick={props.onDisconnect}>{t(props.language, "disconnect")}</Button>
         </div>
       </Card>
@@ -458,6 +541,7 @@ function HistoryPage(props: {
   onEdit: (profile: TunnelProfile) => void;
   onConnect: (id: string) => void;
   onPasswordConnect: (id: string) => void;
+  onKeyUpload: (id: string) => void;
   onDisconnect: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
@@ -487,6 +571,7 @@ function HistoryPage(props: {
             <Button variant="ghost" onClick={() => props.onEdit(profile)}>{t(props.language, "config")}</Button>
             <Button variant="ghost" onClick={() => props.onConnect(profile.id)}>{t(props.language, "connect")}</Button>
             <Button variant="ghost" onClick={() => props.onPasswordConnect(profile.id)}>{t(props.language, "connectWithPassword")}</Button>
+            <Button variant="ghost" onClick={() => props.onKeyUpload(profile.id)}>{props.language === "zh-CN" ? "\u4e0a\u4f20\u5bc6\u94a5" : "Upload Key"}</Button>
             <Button variant="ghost" onClick={() => props.onDisconnect(profile.id)}>{t(props.language, "disconnect")}</Button>
             <Button variant="danger" onClick={() => props.onDelete(profile.id)}>
               <Trash2 size={15} />
@@ -495,6 +580,121 @@ function HistoryPage(props: {
         )}
       />
     </Card>
+  );
+}
+
+function PasswordDialogV2(props: {
+  language: Language;
+  profileName: string;
+  password: string;
+  setPassword: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>{t(props.language, "passwordDialogTitle")}</CardTitle>
+          <CardDescription>{t(props.language, "passwordDialogDescription")}: {props.profileName}</CardDescription>
+        </CardHeader>
+        <div className="grid gap-4">
+          <Input
+            type="password"
+            value={props.password}
+            placeholder={t(props.language, "passwordPlaceholder")}
+            onChange={(event) => props.setPassword(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                props.onSubmit();
+              }
+            }}
+            autoFocus
+          />
+          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">{t(props.language, "passwordOnceNote")}</p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={props.onCancel}>{t(props.language, "cancel")}</Button>
+            <Button onClick={props.onSubmit} disabled={!props.password}>{t(props.language, "connect")}</Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function KeyUploadDialog(props: {
+  language: Language;
+  profileName: string;
+  password: string;
+  setPassword: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const isZh = props.language === "zh-CN";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>{isZh ? "上传 SSH 公钥" : "Upload SSH Public Key"}</CardTitle>
+          <CardDescription>
+            {isZh
+              ? `输入 ${props.profileName} 的 SSH 密码，程序会把本机公钥写入远端 authorized_keys。`
+              : `Enter the SSH password for ${props.profileName}; the app will append your public key to remote authorized_keys.`}
+          </CardDescription>
+        </CardHeader>
+        <div className="grid gap-4">
+          <Input
+            type="password"
+            value={props.password}
+            placeholder={isZh ? "SSH 密码" : "SSH password"}
+            onChange={(event) => props.setPassword(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                props.onSubmit();
+              }
+            }}
+            autoFocus
+          />
+          <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+            {isZh
+              ? "如果未指定私钥文件，程序会使用或生成 %USERPROFILE%\\.ssh\\id_ed25519。密码不会保存。"
+              : "If no key file is specified, the app uses or creates %USERPROFILE%\\.ssh\\id_ed25519. The password is not saved."}
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={props.onCancel}>{t(props.language, "cancel")}</Button>
+            <Button onClick={props.onSubmit} disabled={!props.password}>{isZh ? "上传密钥" : "Upload Key"}</Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function CriticalErrorDialog(props: {
+  language: Language;
+  error: CriticalErrorPayload;
+  onClose: () => void;
+}) {
+  const isZh = props.language === "zh-CN";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-lg border-rose-200 bg-white dark:border-rose-900 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>{isZh ? "连接出现关键错误" : "Critical Connection Error"}</CardTitle>
+          <CardDescription>
+            {isZh
+              ? `${props.error.name} 已停止自动重试。请修复错误后手动重新连接。`
+              : `${props.error.name} stopped retrying. Fix the error, then reconnect manually.`}
+          </CardDescription>
+        </CardHeader>
+        <pre className="max-h-56 overflow-auto rounded-2xl bg-slate-100 p-4 text-sm leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          {props.error.message}
+        </pre>
+        <div className="mt-4 flex justify-end">
+          <Button onClick={props.onClose}>{isZh ? "关闭" : "Close"}</Button>
+        </div>
+      </Card>
+    </div>
   );
 }
 

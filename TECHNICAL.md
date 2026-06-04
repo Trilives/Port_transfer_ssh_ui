@@ -100,18 +100,18 @@ npm.cmd run tauri:build
 
 ```text
 src-tauri\target\release\ssh-port-forwarder.exe
-src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.0_x64-setup.exe
+src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.1_x64-setup.exe
 ```
 
-## 发布 v0.1.0
+## 发布 v0.1.1
 
 建议发布内容：
 
-- Git tag：`v0.1.0`
-- Release title：`SSH Port Forwarder v0.1.0`
+- Git tag：`v0.1.1`
+- Release title：`SSH Port Forwarder v0.1.1`
 - Release asset：
   - `ssh-port-forwarder.exe`
-  - `SSH Port Forwarder_0.1.0_x64-setup.exe`
+  - `SSH Port Forwarder_0.1.1_x64-setup.exe`
 
 发布说明可参考：
 

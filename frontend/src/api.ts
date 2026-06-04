@@ -7,6 +7,7 @@ export const api = {
   deleteProfile: (id: string) => invoke<void>("delete_profile", { id }),
   connectProfile: (id: string) => invoke<TunnelProfile>("connect_profile", { id }),
   connectProfileWithPassword: (id: string, password: string) => invoke<TunnelProfile>("connect_profile_with_password", { id, password }),
+  uploadPublicKey: (id: string, password: string) => invoke<TunnelProfile>("upload_public_key", { id, password }),
   disconnectProfile: (id: string) => invoke<TunnelProfile>("disconnect_profile", { id }),
   disconnectAll: () => invoke<void>("disconnect_all"),
   getSettings: () => invoke<AppSettings>("get_settings"),

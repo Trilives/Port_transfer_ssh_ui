@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
+    io::{Read, Write},
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::Mutex,
@@ -75,6 +76,14 @@ struct LogEntry {
     level: String,
     message: String,
     timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CriticalErrorPayload {
+    id: String,
+    name: String,
+    message: String,
 }
 
 struct ManagedTunnel {
@@ -305,6 +314,31 @@ fn connect_profile_with_password(
 }
 
 #[tauri::command]
+fn upload_public_key(
+    id: String,
+    password: String,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<TunnelProfileView, String> {
+    if password.is_empty() {
+        return Err("Password is required.".to_string());
+    }
+    let profile = state
+        .profiles
+        .lock()
+        .map_err(lock_error)?
+        .iter()
+        .find(|item| item.id == id)
+        .cloned()
+        .ok_or_else(|| "Profile not found.".to_string())?;
+    validate_ssh_profile(&profile)?;
+    let public_key = ensure_public_key(&profile, &app)?;
+    upload_key_to_remote(&profile, &public_key, &password, state.inner(), &app)?;
+    state.add_log("info", format!("[{}] public key uploaded", profile.name), Some(&app));
+    Ok(state.view(profile))
+}
+
+#[tauri::command]
 fn disconnect_profile(id: String, state: State<AppState>, app: AppHandle) -> Result<TunnelProfileView, String> {
     let profile = state
         .profiles
@@ -385,7 +419,7 @@ fn start_tunnel(
         .args(&command[1..])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     #[cfg(target_os = "windows")]
     process.creation_flags(CREATE_NO_WINDOW);
     if let Some(password_value) = password.as_ref() {
@@ -464,16 +498,38 @@ fn watch_tunnel(id: String, data_dir: PathBuf, app: AppHandle) {
                 Ok(Some(status)) => {
                     let profile = tunnel.profile.clone();
                     let stopped_by_user = tunnel.stop_requested;
+                    let mut stderr = String::new();
+                    if let Some(mut stderr_pipe) = child.stderr.take() {
+                        let _ = stderr_pipe.read_to_string(&mut stderr);
+                    }
                     tunnel.child = None;
                     let password = tunnel.password.clone();
-                    (profile, password, stopped_by_user, status.code())
+                    (profile, password, stopped_by_user, status.code(), stderr)
                 }
                 Err(_) => return,
             }
         };
 
-        let (profile, password, stopped_by_user, code) = should_reconnect;
-        state.add_log("warning", format!("[{}] exited with code {:?}", profile.name, code), Some(&app));
+        let (profile, password, stopped_by_user, code, stderr) = should_reconnect;
+        let detail = stderr.trim();
+        let message = if detail.is_empty() {
+            format!("[{}] exited with code {:?}", profile.name, code)
+        } else {
+            format!("[{}] exited with code {:?}: {}", profile.name, code, detail)
+        };
+        if code == Some(255) {
+            state.add_log("error", message.clone(), Some(&app));
+            let _ = app.emit(
+                "critical-error",
+                CriticalErrorPayload {
+                    id: profile.id,
+                    name: profile.name,
+                    message,
+                },
+            );
+            return;
+        }
+        state.add_log("warning", message, Some(&app));
         if stopped_by_user || !profile.keep_connected {
             return;
         }
@@ -502,6 +558,159 @@ fn prepare_askpass_helper(data_dir: &PathBuf) -> Result<PathBuf, String> {
     Ok(helper)
 }
 
+fn ensure_public_key(profile: &TunnelProfile, app: &AppHandle) -> Result<String, String> {
+    let private_key = resolve_identity_file(&profile.identity_file)?;
+    let public_key = PathBuf::from(format!("{}.pub", private_key.to_string_lossy()));
+    if !private_key.exists() {
+        if let Some(parent) = private_key.parent() {
+            fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        }
+        let mut keygen = Command::new("ssh-keygen");
+        keygen
+            .args([
+                "-t",
+                "ed25519",
+                "-N",
+                "",
+                "-C",
+                "ssh-port-forwarder",
+                "-f",
+                private_key
+                    .to_str()
+                    .ok_or_else(|| "Identity file path contains invalid characters.".to_string())?,
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(target_os = "windows")]
+        keygen.creation_flags(CREATE_NO_WINDOW);
+        let output = keygen.output().map_err(|err| err.to_string())?;
+        if !output.status.success() {
+            return Err(format!(
+                "ssh-keygen failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        let state = app.state::<AppState>();
+        state.add_log(
+            "info",
+            format!("[key] generated {}", private_key.display()),
+            Some(app),
+        );
+    }
+
+    if !public_key.exists() {
+        let mut derive = Command::new("ssh-keygen");
+        derive
+            .args([
+                "-y",
+                "-f",
+                private_key
+                    .to_str()
+                    .ok_or_else(|| "Identity file path contains invalid characters.".to_string())?,
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(target_os = "windows")]
+        derive.creation_flags(CREATE_NO_WINDOW);
+        let output = derive.output().map_err(|err| err.to_string())?;
+        if !output.status.success() {
+            return Err(format!(
+                "Cannot derive public key: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        fs::write(&public_key, output.stdout).map_err(|err| err.to_string())?;
+    }
+
+    fs::read_to_string(&public_key)
+        .map(|value| value.trim().to_string())
+        .map_err(|err| err.to_string())
+}
+
+fn resolve_identity_file(identity_file: &str) -> Result<PathBuf, String> {
+    let trimmed = identity_file.trim();
+    if trimmed.is_empty() {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .map_err(|_| "Cannot locate user home directory.".to_string())?;
+        return Ok(PathBuf::from(home).join(".ssh").join("id_ed25519"));
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("~/").or_else(|| trimmed.strip_prefix("~\\")) {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .map_err(|_| "Cannot locate user home directory.".to_string())?;
+        return Ok(PathBuf::from(home).join(rest));
+    }
+
+    Ok(PathBuf::from(trimmed))
+}
+
+fn upload_key_to_remote(
+    profile: &TunnelProfile,
+    public_key: &str,
+    password: &str,
+    state: &AppState,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let command = build_key_upload_command(profile)?;
+    state.add_log("debug", format!("[{}] $ {}", profile.name, command.join(" ")), Some(app));
+    let helper = prepare_askpass_helper(&state.data_dir)?;
+    let mut process = Command::new(&command[0]);
+    process
+        .args(&command[1..])
+        .env("SSH_ASKPASS", helper)
+        .env("SSH_ASKPASS_REQUIRE", "force")
+        .env("DISPLAY", "ssh-port-forwarder")
+        .env("SSH_PORT_FORWARDER_PASSWORD", password)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    process.creation_flags(CREATE_NO_WINDOW);
+    let mut child = process.spawn().map_err(|err| err.to_string())?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(format!("{public_key}\n").as_bytes())
+            .map_err(|err| err.to_string())?;
+    }
+    let output = child.wait_with_output().map_err(|err| err.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Upload public key failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+fn build_key_upload_command(profile: &TunnelProfile) -> Result<Vec<String>, String> {
+    let destination = if profile.ssh_user.trim().is_empty() {
+        profile.ssh_host.trim().to_string()
+    } else {
+        format!("{}@{}", profile.ssh_user.trim(), profile.ssh_host.trim())
+    };
+    let mut command = vec![
+        "ssh".to_string(),
+        "-T".to_string(),
+        "-o".to_string(),
+        "BatchMode=no".to_string(),
+        "-o".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
+        "-p".to_string(),
+        empty_default(&profile.ssh_port, "22").to_string(),
+    ];
+    if !profile.identity_file.trim().is_empty() {
+        command.extend(["-i".to_string(), profile.identity_file.trim().to_string()]);
+    }
+    command.push(destination);
+    command.push(
+        "umask 077; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && key=$(cat) && { grep -qxF \"$key\" ~/.ssh/authorized_keys || printf '%s\\n' \"$key\" >> ~/.ssh/authorized_keys; }"
+            .to_string(),
+    );
+    Ok(command)
+}
+
 fn build_ssh_command(profile: &TunnelProfile) -> Result<Vec<String>, String> {
     let ssh = "ssh".to_string();
     let destination = if profile.ssh_user.trim().is_empty() {
@@ -517,6 +726,8 @@ fn build_ssh_command(profile: &TunnelProfile) -> Result<Vec<String>, String> {
         "ExitOnForwardFailure=yes".to_string(),
         "-o".to_string(),
         "ServerAliveInterval=30".to_string(),
+        "-o".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
         "-p".to_string(),
         empty_default(&profile.ssh_port, "22").to_string(),
     ];
@@ -552,6 +763,20 @@ fn build_ssh_command(profile: &TunnelProfile) -> Result<Vec<String>, String> {
     }
     command.push(destination);
     Ok(command)
+}
+
+fn validate_ssh_profile(profile: &TunnelProfile) -> Result<(), String> {
+    let mut errors = Vec::new();
+    if profile.ssh_host.trim().is_empty() {
+        errors.push("SSH host is required.");
+    }
+    if profile.ssh_port.parse::<u16>().is_err() {
+        errors.push("SSH port must be a valid port.");
+    }
+    if !errors.is_empty() {
+        return Err(errors.join("\n"));
+    }
+    Ok(())
 }
 
 fn validate_profile(profile: &TunnelProfile) -> Result<(), String> {
@@ -635,6 +860,7 @@ pub fn run() {
             delete_profile,
             connect_profile,
             connect_profile_with_password,
+            upload_public_key,
             disconnect_profile,
             disconnect_all,
             get_settings,
