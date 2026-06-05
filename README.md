@@ -4,9 +4,9 @@
 
 ## 界面预览
 
-![主页面运行截图](docs/screenshot-main.png)
+![主页面截图](docs/screenshot-main.png)
 
-> 截图为 v0.1.x 旧界面，v0.2.0 改为主机分组结构，后续会更新。
+![配置页面截图](docs/screenshot-config.png)
 
 ## 主要功能
 
