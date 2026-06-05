@@ -1,6 +1,7 @@
 # SSH Port Forwarder 技术文档
 
 本文档面向开发者，记录当前项目架构、开发环境、构建方式和发布流程。
+完整架构与数据模型见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 技术栈
 
@@ -8,44 +9,75 @@
 - 前端界面：React + TypeScript + Tailwind CSS
 - UI 风格：本地 shadcn/ui 风格组件
 - 转发执行：Rust 调用系统 `ssh.exe`
+- 外部终端：Rust 起一个 PowerShell 窗口运行交互式 `ssh`
 - 打包目标：Windows exe 和 NSIS 安装包
 
 ## 项目结构
 
+v0.2.0 把单文件 `lib.rs` 拆为多个模块，并把前端拆为页面 / 组件 / 弹窗。
+
 ```text
-frontend/                      React + TypeScript + Tailwind UI
-frontend/src/App.tsx           主界面、连接管理、设置、说明页和弹窗
-frontend/src/api.ts            Tauri command 调用封装
-frontend/src/components        本地 UI 基础组件
-frontend/src/components/dialogs.tsx  密码、公钥上传、严重错误等弹窗
-frontend/src/pages/GuidePage.tsx     使用向导页面
-frontend/src/i18n.ts           中文/英文界面文案
-src-tauri/                     Tauri + Rust 后端
-src-tauri/src/lib.rs           配置、日志、SSH 进程、公钥上传、配置校验、Tauri commands
-src-tauri/src/main.rs          程序入口和 askpass helper 入口
+src-tauri/src/
+  main.rs            入口 + askpass helper
+  lib.rs             run()、Tauri Builder、命令注册
+  model.rs           Host / Forward / 枚举 / AppSettings / LogEntry / View
+  store.rs           read_json / write_json
+  state.rs           AppState、ManagedTunnel、视图与查找方法、日志写入
+  validate.rs        validate_host / validate_forward
+  portcheck.rs       端口占用检测（netstat + tasklist）
+  terminal.rs        open_terminal：外部 PowerShell 终端
+  ssh/               command / process / probe / keys
+  commands/          hosts / forwards / exec / keys / settings（Tauri 命令）
+
+frontend/src/
+  App.tsx            壳：导航、页面路由、弹窗编排、主题应用
+  types.ts api.ts i18n.ts
+  pages/             DashboardPage / ConfigPage / LogsPage / SettingsPage / GuidePage
+  components/        HostCard / ForwardRow / LogTable / StatusBadge / dialogs.tsx
+  components/ui/     button / card / input / select
 ```
 
 旧的 Python/Tkinter 原型和 uv 环境已经移除。
+
+## 数据模型
+
+- **Host（一级）**：SSH 连接参数（主机、端口、用户、私钥、额外参数）+ `forwards` 列表。
+- **Forward（二级）**：转发参数（模式、监听地址/端口、目标地址/端口、保持连接）。
+- 持久化文件 `hosts.json`（嵌套 forwards）。v0.1.x 的 `profiles.json` 不迁移，启动时备份为 `profiles.json.v0.1.bak`。
+
+## Tauri 命令
+
+主机：`list_hosts` / `save_host` / `delete_host`。
+转发：`save_forward` / `delete_forward` / `connect_forward` / `connect_forward_with_password` /
+`disconnect_forward` / `disconnect_host` / `disconnect_all`。
+指令与终端：`send_command` / `open_terminal`。
+密钥与探测：`upload_public_key` / `probe_connection` / `get_host_fingerprint` / `remove_known_host`。
+设置与日志：`get_settings` / `save_settings_cmd` / `list_logs`。
+系统环境：`check_ssh`（检测 `ssh.exe`）/ `install_openssh`（提权安装 OpenSSH 客户端）。
+
+事件：`log-entry`（单条日志）、`critical-error`（退出码 255，载荷含 hostId/forwardId）。
 
 ## 后端行为
 
 Rust 后端负责：
 
-- 读取和保存历史连接。
-- 读取和保存主题、语言、日志等级等设置。
-- 调用系统 `ssh.exe` 启动 Local / Remote / Dynamic 转发。
-- 管理 SSH 子进程的连接、断开、全部断开和自动重连。
-- 在保存连接前校验 SSH 配置参数（主机、端口、转发地址等）。
-- 连接前用 `BatchMode=yes` 探测（`probe_connection`），区分「可免密直连 / 需要密码 / 主机指纹变化 / 不可达」，由前端据此自动直连、弹密码框或弹指纹变化提示。
-- 指纹变化时提供 `get_host_fingerprint`（`ssh-keyscan` + `ssh-keygen -lf`）展示新指纹，并提供 `remove_known_host`（`ssh-keygen -R`）在用户确认后移除旧记录再重试。
+- 读取和保存主机与转发（`hosts.json`）、主题/语言/日志等级设置。
+- 调用 `ssh.exe` 启动 Local / Remote / Dynamic 转发，复用父主机连接参数。
+- 管理 SSH 子进程的连接、断开、整机断开、全部断开和自动重连。
+- 新建/连接转发前用 `netstat -ano` + `tasklist` 检测本机监听端口是否被占用（local / dynamic）。
+- 保存主机/转发前校验参数（主机/端口/转发地址等）。
+- 连接前用 `BatchMode=yes` 探测（`probe_connection`），区分免密直连 / 需要密码 / 主机指纹变化 / 不可达。
+- 指纹变化时用 `get_host_fingerprint` 展示新指纹，`remove_known_host` 在用户确认后移除旧记录再重试。
+- `send_command` 通过 SSH 在主机上执行一条指令并返回输出（依赖免密登录）。
+- `open_terminal` 起一个外部 PowerShell 窗口运行交互式 `ssh`（`CREATE_NEW_CONSOLE`）。
 - 一键把本地公钥上传到远程主机的 `authorized_keys`，配置免密登录。
 - 通过 `SSH_ASKPASS` 实现自动弹出的一次性密码连接。
-- 在 Windows 下使用 `CREATE_NO_WINDOW` 启动 SSH 子进程，避免连接时弹出终端窗口。
+- 在 Windows 下使用 `CREATE_NO_WINDOW` 启动后台 SSH 子进程，避免弹出终端窗口。
 - 在应用退出时清理所有由本程序启动的 SSH 转发进程。
 
 ## 数据存储
 
-后端使用 `directories::ProjectDirs` 获取系统应用数据目录。历史连接、设置和日志写入用户应用数据目录，而不是源码目录。
+后端使用 `directories::ProjectDirs` 获取系统应用数据目录。主机配置、设置和日志写入用户应用数据目录，而不是源码目录。
 
 ## 开发环境
 
@@ -85,8 +117,7 @@ npm.cmd run build
 ## Rust 检查
 
 ```powershell
-cd src-tauri
-cargo check
+cargo check --manifest-path src-tauri\Cargo.toml
 ```
 
 ## 启动开发版
@@ -110,42 +141,39 @@ $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
 
 ```text
 src-tauri\target\release\ssh-port-forwarder.exe
-src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.1.2_x64-setup.exe
+src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.2.0_x64-setup.exe
 ```
 
-## 发布 v0.1.2
+## 发布 v0.2.0
 
 建议发布内容：
 
-- Git tag：`v0.1.2`
-- Release title：`SSH Port Forwarder v0.1.2`
+- Git tag：`v0.2.0`
+- Release title：`SSH Port Forwarder v0.2.0`
 - Release asset：
   - `ssh-port-forwarder.exe`
-  - `SSH Port Forwarder_0.1.2_x64-setup.exe`
+  - `SSH Port Forwarder_0.2.0_x64-setup.exe`
 
 发布说明可参考：
 
 ```text
+v0.2.0 更新：
+- 改为以主机为中心的两级结构：主机（连接参数）为一级目录，端口转发（监听/目标参数）为二级目录。
+- 主机操作：发送指令、打开外部终端、上传密钥、新建端口转发。
+- 新建/连接端口转发前检测端口占用，报错指出占用的转发或进程（含 PID）。
+- 主页改为轻量监控板（当前连接 + 关键事件），完整日志移到独立页面。
+- 默认改为浅色主题；设置项随界面语言切换；修复说明文档暗色显示问题；补充密钥文件填写说明。
+- 建立连接时不再要求填写转发参数，转发参数只在新建端口转发界面填写。
+- 后端拆分为 model/store/state/validate/portcheck/ssh/commands 等模块，前端拆分为页面与组件。
+- 数据文件改为 hosts.json，旧 profiles.json 自动备份为 profiles.json.v0.1.bak。
+- 启动时检测 OpenSSH 客户端，未安装时弹窗可一键安装（提权 Add-WindowsCapability）。
+
 v0.1.2 更新：
 - 连接时自动判断认证方式：能免密直连就直接连接，需要密码时自动弹窗输入。
-- 移除手动「输入密码连接」按钮，改为自动判断。
 - 检测到远程主机指纹变化时弹窗提示，由用户核对后决定是否信任新密钥并重试。
-- 上传公钥前先检测是否已可免密直连，可直连时提示并取消。
-- 主界面导航「历史连接」改名为「配置」。
-
-v0.1.1 更新：
-- 新增一键上传 SSH 公钥到远程主机，快速配置免密登录。
-- 新增公钥上传、密码输入、严重错误对话框。
-- 新增使用向导页面。
-- 保存连接前校验 SSH 配置参数。
 
 首次发布（v0.1.0）：
-- 可视化管理 SSH 端口转发。
-- 支持历史连接、连接管理、配置弹窗和主页面快捷操作。
-- 支持 Local / Remote / Dynamic 转发模式。
-- 支持一次性密码连接、保持连接、日志等级、主题和语言设置。
-- Windows 下隐藏 SSH 子进程终端窗口。
-- 应用退出时自动清理当前转发连接。
+- 可视化管理 SSH 端口转发，支持 Local / Remote / Dynamic 模式与历史连接。
 ```
 
 ## 开源协议

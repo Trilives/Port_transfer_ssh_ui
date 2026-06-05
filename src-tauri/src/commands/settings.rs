@@ -1,0 +1,46 @@
+use tauri::{AppHandle, State};
+
+use crate::model::{AppSettings, LogEntry};
+use crate::state::AppState;
+use crate::store::write_json;
+use crate::util::{lock_error, log_rank, normalize_choice};
+
+#[tauri::command]
+pub fn get_settings(state: State<AppState>) -> Result<AppSettings, String> {
+    state.settings.lock().map_err(lock_error).map(|settings| settings.clone())
+}
+
+#[tauri::command]
+pub fn save_settings_cmd(
+    settings: AppSettings,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<AppSettings, String> {
+    let normalized = AppSettings {
+        theme: normalize_choice(&settings.theme, &["dark", "light"], "light"),
+        language: normalize_choice(&settings.language, &["zh-CN", "en-US"], "zh-CN"),
+        log_level: normalize_choice(&settings.log_level, &["debug", "info", "warning", "error"], "info"),
+    };
+    *state.settings.lock().map_err(lock_error)? = normalized.clone();
+    write_json(state.settings_path(), &normalized)?;
+    state.add_log(
+        "info",
+        format!(
+            "[settings] theme={} language={} logLevel={}",
+            normalized.theme, normalized.language, normalized.log_level
+        ),
+        Some(&app),
+    );
+    Ok(normalized)
+}
+
+#[tauri::command]
+pub fn list_logs(level: String, state: State<AppState>) -> Result<Vec<LogEntry>, String> {
+    let min_rank = log_rank(&level);
+    let logs = state.logs.lock().map_err(lock_error)?;
+    Ok(logs
+        .iter()
+        .filter(|entry| log_rank(&entry.level) >= min_rank)
+        .cloned()
+        .collect())
+}
