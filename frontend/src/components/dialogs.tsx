@@ -138,8 +138,10 @@ export function SendCommandDialog(props: {
   busy: boolean;
   onClose: () => void;
   onRun: () => void;
+  onRunWithPassword: () => void;
 }) {
   const lang = props.language;
+  const disabled = props.busy || !props.command.trim();
   return (
     <Modal maxWidth="max-w-2xl">
       <DialogHeader
@@ -153,7 +155,7 @@ export function SendCommandDialog(props: {
           placeholder={t(lang, "commandPlaceholder")}
           onChange={(e) => props.setCommand(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !props.busy) props.onRun();
+            if (e.key === "Enter" && !disabled) props.onRun();
           }}
           autoFocus
         />
@@ -167,10 +169,51 @@ export function SendCommandDialog(props: {
         )}
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={props.onClose}>{t(lang, "close")}</Button>
-          <Button onClick={props.onRun} disabled={props.busy || !props.command.trim()}>{t(lang, "run")}</Button>
+          <Button variant="secondary" onClick={props.onRunWithPassword} disabled={disabled}>{t(lang, "sendWithPassword")}</Button>
+          <Button onClick={props.onRun} disabled={disabled}>{t(lang, "run")}</Button>
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** 通用一次性密码输入弹窗（层级高于其他弹窗）。 */
+export function InputPasswordDialog(props: {
+  language: Language;
+  title: string;
+  description?: string;
+  submitLabel: string;
+  password: string;
+  setPassword: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const lang = props.language;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>{props.title}</CardTitle>
+          {props.description && <CardDescription>{props.description}</CardDescription>}
+        </CardHeader>
+        <div className="grid gap-4">
+          <Input
+            type="password"
+            value={props.password}
+            placeholder={t(lang, "passwordPlaceholder")}
+            onChange={(e) => props.setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") props.onSubmit();
+            }}
+            autoFocus
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
+            <Button onClick={props.onSubmit} disabled={!props.password}>{props.submitLabel}</Button>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 

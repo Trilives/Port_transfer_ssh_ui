@@ -28,6 +28,7 @@ pub fn run() {
             commands::forwards::disconnect_host,
             commands::forwards::disconnect_all,
             commands::exec::send_command,
+            commands::exec::send_command_with_password,
             commands::exec::open_terminal,
             commands::keys::upload_public_key,
             commands::keys::probe_connection,

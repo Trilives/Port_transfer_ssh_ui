@@ -1,36 +1,15 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 use tauri::{AppHandle, State};
 
 use crate::ssh::command::build_send_command;
+use crate::ssh::process::{apply_askpass, prepare_askpass_helper};
 use crate::state::AppState;
 use crate::terminal::open_terminal as open_terminal_window;
 use crate::util::no_window;
 
-/// 通过 SSH 在主机上执行一条指令，返回合并后的输出（依赖已配置的免密登录）。
-#[tauri::command]
-pub fn send_command(
-    host_id: String,
-    command: String,
-    state: State<AppState>,
-    app: AppHandle,
-) -> Result<String, String> {
-    if command.trim().is_empty() {
-        return Err("Command is required.".to_string());
-    }
-    let host = state.find_host(&host_id)?;
-    let argv = build_send_command(&host, command.trim())?;
-    state.add_log("info", format!("[{}] exec $ {}", host.name, command.trim()), Some(&app));
-
-    let mut process = Command::new(&argv[0]);
-    process
-        .args(&argv[1..])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    no_window(&mut process);
-    let output = process.output().map_err(|err| err.to_string())?;
-
+/// 合并 ssh 输出的 stdout 与 stderr，供弹窗展示。
+fn merge_output(output: &Output) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut combined = String::new();
@@ -46,7 +25,65 @@ pub fn send_command(
     if !output.status.success() && combined.trim().is_empty() {
         combined = format!("exit code {:?}", output.status.code());
     }
-    Ok(combined)
+    combined
+}
+
+/// 通过 SSH 在主机上执行一条指令，返回输出（依赖已配置的免密登录）。
+#[tauri::command]
+pub fn send_command(
+    host_id: String,
+    command: String,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    if command.trim().is_empty() {
+        return Err("Command is required.".to_string());
+    }
+    let host = state.find_host(&host_id)?;
+    let argv = build_send_command(&host, command.trim(), false)?;
+    state.add_log("info", format!("[{}] exec $ {}", host.name, command.trim()), Some(&app));
+
+    let mut process = Command::new(&argv[0]);
+    process
+        .args(&argv[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    no_window(&mut process);
+    let output = process.output().map_err(|err| err.to_string())?;
+    Ok(merge_output(&output))
+}
+
+/// 通过 SSH 在主机上执行一条指令，使用一次性密码（askpass 注入）。
+#[tauri::command]
+pub fn send_command_with_password(
+    host_id: String,
+    command: String,
+    password: String,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    if command.trim().is_empty() {
+        return Err("Command is required.".to_string());
+    }
+    if password.is_empty() {
+        return Err("Password is required.".to_string());
+    }
+    let host = state.find_host(&host_id)?;
+    let argv = build_send_command(&host, command.trim(), true)?;
+    state.add_log("info", format!("[{}] exec(pw) $ {}", host.name, command.trim()), Some(&app));
+
+    let helper = prepare_askpass_helper(&state.data_dir)?;
+    let mut process = Command::new(&argv[0]);
+    process
+        .args(&argv[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    apply_askpass(&mut process, helper, &password);
+    no_window(&mut process);
+    let output = process.output().map_err(|err| err.to_string())?;
+    Ok(merge_output(&output))
 }
 
 /// 打开外部 PowerShell 终端窗口连接到该主机。

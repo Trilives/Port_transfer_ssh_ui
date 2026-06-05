@@ -19,6 +19,8 @@ export const api = {
 
   // 指令 / 终端 / 密钥
   sendCommand: (hostId: string, command: string) => invoke<string>("send_command", { hostId, command }),
+  sendCommandWithPassword: (hostId: string, command: string, password: string) =>
+    invoke<string>("send_command_with_password", { hostId, command, password }),
   openTerminal: (hostId: string) => invoke<void>("open_terminal", { hostId }),
   uploadPublicKey: (hostId: string, password: string) => invoke<Host>("upload_public_key", { hostId, password }),
   probeConnection: (hostId: string) => invoke<string>("probe_connection", { hostId }),

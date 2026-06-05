@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::process::{Command, Stdio};
 
 use crate::state::AppState;
@@ -42,22 +43,27 @@ pub fn detect_conflict(
         return None;
     }
 
-    // 1) 应用内：是否有另一条运行中的转发监听同一端口。
+    // 1) 收集本应用所有运行中转发的 ssh 进程 PID，同时检查应用内端口冲突。
     //    注意：这里持有 tunnels 锁，直接检查子进程状态，不要再调用会二次加锁的 status_for。
+    let mut own_pids: HashSet<u32> = HashSet::new();
     if let Ok(mut tunnels) = state.tunnels.lock() {
         for (id, tunnel) in tunnels.iter_mut() {
-            if id == exclude_forward_id {
-                continue;
-            }
-            if !tunnel.forward.binds_local_port() || tunnel.forward.bind_port.trim() != port {
-                continue;
-            }
-            let running = tunnel
-                .child
-                .as_mut()
-                .map(|child| child.try_wait().ok().flatten().is_none())
-                .unwrap_or(false);
-            if running {
+            // 仅统计仍在运行的子进程（断开/退出的转发已从 map 移除，但这里再保险一次）。
+            let pid = match tunnel.child.as_mut() {
+                Some(child) => {
+                    if child.try_wait().ok().flatten().is_none() {
+                        child.id()
+                    } else {
+                        continue;
+                    }
+                }
+                None => continue,
+            };
+            own_pids.insert(pid);
+            if id != exclude_forward_id
+                && tunnel.forward.binds_local_port()
+                && tunnel.forward.bind_port.trim() == port
+            {
                 return Some(PortConflict::Internal {
                     forward_name: tunnel.forward.name.clone(),
                 });
@@ -65,16 +71,16 @@ pub fn detect_conflict(
         }
     }
 
-    // 2) 操作系统：是否有其他进程在监听该端口。
-    if let Some((pid, process)) = port_listener(port) {
+    // 2) 操作系统层：跳过本应用自己的 ssh 进程，只有其他进程才算占用。
+    if let Some((pid, process)) = port_listener(port, &own_pids) {
         return Some(PortConflict::External { process, pid });
     }
 
     None
 }
 
-/// 返回监听指定端口的 (pid, process_name)。
-fn port_listener(port: &str) -> Option<(String, String)> {
+/// 返回监听指定端口的 (pid, process_name)，忽略本应用自己的 ssh 进程。
+fn port_listener(port: &str, own_pids: &HashSet<u32>) -> Option<(String, String)> {
     let mut netstat = Command::new("netstat");
     netstat
         .args(["-ano", "-p", "tcp"])
@@ -100,6 +106,12 @@ fn port_listener(port: &str) -> Option<(String, String)> {
         if let Some(idx) = local.rfind(':') {
             if &local[idx..] == needle {
                 let pid = cols[4].to_string();
+                // 本应用自己启动的 ssh 进程不算占用。
+                if let Ok(pid_num) = pid.parse::<u32>() {
+                    if own_pids.contains(&pid_num) {
+                        continue;
+                    }
+                }
                 let process = process_name(&pid).unwrap_or_else(|| "unknown".to_string());
                 return Some((pid, process));
             }

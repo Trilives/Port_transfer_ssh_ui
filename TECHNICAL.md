@@ -141,22 +141,30 @@ $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
 
 ```text
 src-tauri\target\release\ssh-port-forwarder.exe
-src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.2.0_x64-setup.exe
+src-tauri\target\release\bundle\nsis\SSH Port Forwarder_0.2.1_x64-setup.exe
 ```
 
-## 发布 v0.2.0
+## 发布 v0.2.1
 
 建议发布内容：
 
-- Git tag：`v0.2.0`
-- Release title：`SSH Port Forwarder v0.2.0`
+- Git tag：`v0.2.1`
+- Release title：`SSH Port Forwarder v0.2.1`
 - Release asset：
   - `ssh-port-forwarder.exe`
-  - `SSH Port Forwarder_0.2.0_x64-setup.exe`
+  - `SSH Port Forwarder_0.2.1_x64-setup.exe`
 
 发布说明可参考：
 
 ```text
+v0.2.1 更新：
+- 主页改为按主机分组的左右双栏：左栏窄列显示主机名并随端口数自动撑高，右栏列出该主机运行中的端口。
+- 主页新增「新建」快捷入口（跳转配置页），每条转发可单独断开，断开后即从主页消失。
+- 配置页空闲 3 分钟自动跳回主页（其他页面不受影响）。
+- 发送指令新增「使用密码发送」：用一次性密码执行远程指令。
+- 新建端口转发默认不勾选「保持连接」；勾选后保存即自动连接，并暂存密码用于异常重连。
+- 修复端口占用检测误报：本应用自己的 ssh 进程不再被当作外部占用，只有其他进程或另一条运行中的转发才算冲突。
+
 v0.2.0 更新：
 - 改为以主机为中心的两级结构：主机（连接参数）为一级目录，端口转发（监听/目标参数）为二级目录。
 - 主机操作：发送指令、打开外部终端、上传密钥、新建端口转发。

@@ -112,17 +112,28 @@ pub fn build_key_upload_command(host: &Host) -> Result<Vec<String>, String> {
     Ok(command)
 }
 
-/// 发送一次性指令命令：`BatchMode=yes`，依赖已配置的免密登录。
-pub fn build_send_command(host: &Host, remote_command: &str) -> Result<Vec<String>, String> {
+/// 发送一次性指令命令。`with_password=false` 时用 `BatchMode=yes` 依赖免密登录；
+/// `with_password=true` 时允许密码（配合 askpass 注入）。
+pub fn build_send_command(
+    host: &Host,
+    remote_command: &str,
+    with_password: bool,
+) -> Result<Vec<String>, String> {
+    let batch_mode = if with_password { "BatchMode=no" } else { "BatchMode=yes" };
+    let prompts = if with_password {
+        "NumberOfPasswordPrompts=1"
+    } else {
+        "NumberOfPasswordPrompts=0"
+    };
     let mut command = vec![
         "ssh".to_string(),
         "-T".to_string(),
         "-o".to_string(),
-        "BatchMode=yes".to_string(),
+        batch_mode.to_string(),
         "-o".to_string(),
         "ConnectTimeout=8".to_string(),
         "-o".to_string(),
-        "NumberOfPasswordPrompts=0".to_string(),
+        prompts.to_string(),
         "-o".to_string(),
         "StrictHostKeyChecking=accept-new".to_string(),
         "-p".to_string(),

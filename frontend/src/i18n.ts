@@ -25,6 +25,7 @@ const text = {
     keyEvents: "关键事件",
     noEvents: "暂无连接、断开或错误事件。",
     stopAll: "全部断开",
+    new: "新建",
     host: "主机",
 
     // 配置页
@@ -85,6 +86,7 @@ const text = {
     sendCommandDesc: "通过 SSH 在该主机上执行一条指令（依赖已配置的免密登录）。",
     commandPlaceholder: "例如：uptime",
     run: "执行",
+    sendWithPassword: "使用密码发送",
     running2: "执行中…",
     output: "输出",
 
@@ -162,6 +164,7 @@ const text = {
     keyEvents: "Key Events",
     noEvents: "No connect, disconnect, or error events yet.",
     stopAll: "Stop All",
+    new: "New",
     host: "Host",
 
     configTitle: "Hosts & Port Forwards",
@@ -215,6 +218,7 @@ const text = {
     sendCommandDesc: "Run a single command on this host over SSH (requires passwordless login).",
     commandPlaceholder: "e.g. uptime",
     run: "Run",
+    sendWithPassword: "Send with password",
     running2: "Running…",
     output: "Output",
 

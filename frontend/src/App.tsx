@@ -10,6 +10,7 @@ import {
   ForwardDialog,
   HostDialog,
   HostKeyChangedDialog,
+  InputPasswordDialog,
   KeyUploadDialog,
   PasswordDialog,
   SendCommandDialog,
@@ -38,14 +39,14 @@ const newHost = (): Host => ({
 });
 
 const newForward = (): Forward => ({
-  id: "",
+  id: crypto.randomUUID(),
   name: "",
   mode: "local",
   bindHost: "127.0.0.1",
   bindPort: "",
   targetHost: "127.0.0.1",
   targetPort: "",
-  keepConnected: true,
+  keepConnected: false,
 });
 
 export function App() {
@@ -64,6 +65,8 @@ export function App() {
   const [command, setCommand] = useState("");
   const [commandOutput, setCommandOutput] = useState("");
   const [commandBusy, setCommandBusy] = useState(false);
+  const [sendCmdPwOpen, setSendCmdPwOpen] = useState(false);
+  const [sendCmdPwValue, setSendCmdPwValue] = useState("");
   const [passwordTarget, setPasswordTarget] = useState<{ host: Host; forward: Forward } | null>(null);
   const [passwordValue, setPasswordValue] = useState("");
   const [keyUploadTarget, setKeyUploadTarget] = useState<Host | null>(null);
@@ -77,10 +80,30 @@ export function App() {
   const shownCriticalErrors = useRef(new Set<string>());
 
   const language = settings.language;
+  const modalOpen = Boolean(
+    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || deleteHostTarget || sshMissing,
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", settings.theme === "dark");
   }, [settings.theme]);
+
+  // 仅在「配置」页且无弹窗时启用空闲计时：3 分钟无操作自动跳回主页。
+  useEffect(() => {
+    if (page !== "config" || modalOpen) return;
+    let timer = 0;
+    const reset = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setPage("dashboard"), 3 * 60 * 1000);
+    };
+    const events = ["mousemove", "mousedown", "keydown", "wheel", "touchstart"];
+    events.forEach((event) => window.addEventListener(event, reset, { passive: true }));
+    reset();
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((event) => window.removeEventListener(event, reset));
+    };
+  }, [page, modalOpen]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -187,12 +210,18 @@ export function App() {
   // ---- Forward CRUD ----
   async function saveForward() {
     if (!forwardDialog) return;
+    const { hostId, draft } = forwardDialog;
     try {
-      await api.saveForward(forwardDialog.hostId, forwardDialog.draft);
+      const updatedHost = await api.saveForward(hostId, draft);
       setForwardDialog(null);
       setError("");
       await refreshHosts();
-      expand(forwardDialog.hostId);
+      expand(hostId);
+      // 勾选了保持连接：保存后自动启动该连接（连接流程会在需要时弹密码并暂存用于重连）。
+      if (draft.keepConnected) {
+        const forward = updatedHost.forwards.find((item) => item.id === draft.id);
+        if (forward) await connectForward(updatedHost, forward);
+      }
     } catch (err) {
       setError(String(err));
     }
@@ -332,6 +361,22 @@ export function App() {
     }
   }
 
+  async function runSendCommandWithPassword() {
+    if (!sendCmd || !command.trim() || !sendCmdPwValue) return;
+    const password = sendCmdPwValue;
+    setSendCmdPwOpen(false);
+    setSendCmdPwValue("");
+    setCommandBusy(true);
+    setCommandOutput("");
+    try {
+      setCommandOutput(await api.sendCommandWithPassword(sendCmd.hostId, command, password));
+    } catch (err) {
+      setCommandOutput(String(err));
+    } finally {
+      setCommandBusy(false);
+    }
+  }
+
   async function openTerminal(host: Host) {
     try {
       await api.openTerminal(host.id);
@@ -406,10 +451,15 @@ export function App() {
                 language={language}
                 hosts={hosts}
                 logs={logs}
+                onNew={() => {
+                  setPage("config");
+                  setHostDialog(newHost());
+                }}
                 onStopAll={async () => {
                   await api.disconnectAll();
                   await refreshHosts();
                 }}
+                onDisconnectForward={disconnectForward}
               />
             )}
             {page === "config" && (
@@ -425,6 +475,8 @@ export function App() {
                   setSendCmd({ hostId: host.id, hostName: host.name });
                   setCommand("");
                   setCommandOutput("");
+                  setSendCmdPwOpen(false);
+                  setSendCmdPwValue("");
                 }}
                 onOpenTerminal={openTerminal}
                 onUploadKey={requestKeyUpload}
@@ -468,8 +520,31 @@ export function App() {
           setCommand={setCommand}
           output={commandOutput}
           busy={commandBusy}
-          onClose={() => setSendCmd(null)}
+          onClose={() => {
+            setSendCmd(null);
+            setSendCmdPwOpen(false);
+            setSendCmdPwValue("");
+          }}
           onRun={runSendCommand}
+          onRunWithPassword={() => {
+            setSendCmdPwValue("");
+            setSendCmdPwOpen(true);
+          }}
+        />
+      )}
+      {sendCmd && sendCmdPwOpen && (
+        <InputPasswordDialog
+          language={language}
+          title={t(language, "sendWithPassword")}
+          description={sendCmd.hostName}
+          submitLabel={t(language, "run")}
+          password={sendCmdPwValue}
+          setPassword={setSendCmdPwValue}
+          onCancel={() => {
+            setSendCmdPwOpen(false);
+            setSendCmdPwValue("");
+          }}
+          onSubmit={runSendCommandWithPassword}
         />
       )}
       {passwordTarget && (
