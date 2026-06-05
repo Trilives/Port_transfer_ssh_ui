@@ -33,9 +33,14 @@ pub fn probe_connection(host: &Host, state: &AppState, app: &AppHandle) -> Resul
     {
         return Ok("host_key_changed".to_string());
     }
+    // 已连上主机但免密认证不可用（BatchMode=yes 下无可用方式、被服务器关闭连接等）→ 需要密码。
     if lower.contains("permission denied")
         || lower.contains("publickey")
         || lower.contains("no supported authentication")
+        || lower.contains("connection closed by")
+        || lower.contains("too many authentication failures")
+        || lower.contains("authentication failed")
+        || lower.contains("keyboard-interactive")
     {
         return Ok("password_required".to_string());
     }
