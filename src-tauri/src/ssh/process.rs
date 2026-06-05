@@ -31,7 +31,7 @@ pub fn start_tunnel(
         }
     }
 
-    let command = build_ssh_command(&host, &forward)?;
+    let command = build_ssh_command(&host, &forward, password.is_some())?;
     state.add_log(
         "debug",
         format!("[{}/{}] $ {}", host.name, forward.name, command.join(" ")),

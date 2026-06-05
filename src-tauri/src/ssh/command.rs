@@ -21,7 +21,11 @@ fn push_identity_and_extra(host: &Host, command: &mut Vec<String>) -> Result<(),
 }
 
 /// 后台端口转发命令：`ssh -N -T … -L/-R/-D … user@host`。
-pub fn build_ssh_command(host: &Host, forward: &Forward) -> Result<Vec<String>, String> {
+pub fn build_ssh_command(
+    host: &Host,
+    forward: &Forward,
+    with_password: bool,
+) -> Result<Vec<String>, String> {
     let mut command = vec![
         "ssh".to_string(),
         "-N".to_string(),
@@ -35,6 +39,18 @@ pub fn build_ssh_command(host: &Host, forward: &Forward) -> Result<Vec<String>, 
         "-p".to_string(),
         empty_default(&host.ssh_port, "22").to_string(),
     ];
+    if with_password {
+        command.extend([
+            "-o".to_string(),
+            "BatchMode=no".to_string(),
+            "-o".to_string(),
+            "NumberOfPasswordPrompts=1".to_string(),
+            "-o".to_string(),
+            "PreferredAuthentications=password,keyboard-interactive".to_string(),
+            "-o".to_string(),
+            "PubkeyAuthentication=no".to_string(),
+        ]);
+    }
     push_identity_and_extra(host, &mut command)?;
 
     let bind = empty_default(&forward.bind_host, "127.0.0.1");
