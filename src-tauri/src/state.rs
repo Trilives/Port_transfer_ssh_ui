@@ -159,6 +159,7 @@ impl AppState {
             ssh_user: host.ssh_user,
             identity_file: host.identity_file,
             extra_options: host.extra_options,
+            proxy_jump: host.proxy_jump,
             forwards,
             pinned: host.pinned,
             updated_at: host.updated_at,

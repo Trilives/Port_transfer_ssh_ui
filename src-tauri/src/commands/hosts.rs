@@ -2,7 +2,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::model::{Host, HostView, TunnelStatus};
-use crate::ssh::process::stop_tunnel;
+use crate::ssh::process::{restart_forward, stop_tunnel};
 use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
@@ -23,8 +23,12 @@ pub fn save_host(mut host: Host, state: State<AppState>, app: AppHandle) -> Resu
     }
     host.updated_at = now_millis();
 
+    // 记录旧的连接关键字段，用于判断是否需要重启运行中的转发。
+    let mut connection_changed = false;
     let mut hosts = state.hosts.lock().map_err(lock_error)?;
     if let Some(existing) = hosts.iter_mut().find(|item| item.id == host.id) {
+        connection_changed = existing.ssh_host.trim() != host.ssh_host.trim()
+            || existing.ssh_user.trim() != host.ssh_user.trim();
         // 保留已有转发列表与置顶状态，仅更新连接参数与修改时间。
         host.forwards = existing.forwards.clone();
         host.pinned = existing.pinned;
@@ -35,6 +39,21 @@ pub fn save_host(mut host: Host, state: State<AppState>, app: AppHandle) -> Resu
     write_json(state.hosts_path(), &*hosts)?;
     drop(hosts);
     state.add_log("info", format!("[{}] host saved", host.name), Some(&app));
+
+    // 主机 IP 或用户变化 → 用新参数重启该主机下所有运行中的转发。
+    if connection_changed {
+        for forward in &host.forwards {
+            if matches!(state.status_for(&forward.id), TunnelStatus::Running) {
+                if let Err(err) = restart_forward(host.clone(), forward.clone(), state.inner(), &app) {
+                    state.add_log(
+                        "warning",
+                        format!("[{}/{}] restart after edit failed: {}", host.name, forward.name, err),
+                        Some(&app),
+                    );
+                }
+            }
+        }
+    }
     Ok(state.host_view(host))
 }
 

@@ -2,6 +2,7 @@ mod commands;
 mod model;
 mod portcheck;
 mod ssh;
+mod sshconfig;
 mod state;
 mod store;
 mod terminal;
@@ -21,6 +22,11 @@ pub fn run() {
             commands::hosts::save_host,
             commands::hosts::set_host_pinned,
             commands::hosts::delete_host,
+            commands::transfer::read_import_file,
+            commands::transfer::read_import_ssh_config,
+            commands::transfer::import_hosts,
+            commands::transfer::export_hosts_to_file,
+            commands::transfer::export_hosts_to_ssh_config,
             commands::forwards::save_forward,
             commands::forwards::delete_forward,
             commands::forwards::connect_forward,

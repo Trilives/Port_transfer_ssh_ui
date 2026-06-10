@@ -48,6 +48,7 @@ Host  (一级目录 = SSH 服务器)
 ├─ sshUser: String
 ├─ identityFile: String     // 私钥文件路径，连接级；留空用默认 id_ed25519
 ├─ extraOptions: String     // 作用于该主机所有 ssh 操作的额外参数
+├─ proxyJump: String        // 跳板机（ProxyJump），可空；连接时加 -J
 ├─ pinned: bool             // 置顶；列表排序时优先
 ├─ updatedAt: i64           // 最后修改时间（Unix 毫秒），列表按其从新到旧排序
 └─ forwards: Vec<Forward>   // 二级目录，嵌套存储
@@ -82,6 +83,7 @@ model.rs           Host / Forward / 枚举 / AppSettings / LogEntry / View / Def
 store.rs           read_json / write_json、数据目录路径、AppState 持久化与日志写盘
 validate.rs        validate_host / validate_forward
 portcheck.rs       本机端口占用检测 + 占用进程名/PID（netstat + tasklist）
+sshconfig.rs       解析/写入 ~/.ssh/config（导入主机、导出到托管区块）
 ssh/
   mod.rs           子模块再导出
   command.rs       build_ssh / build_probe / build_key_upload / build_send 命令构造
@@ -97,6 +99,7 @@ commands/
   exec.rs          send_command / open_terminal
   keys.rs          upload_public_key / probe_connection / get_host_fingerprint / remove_known_host
   settings.rs      get_settings / save_settings_cmd / list_logs
+  transfer.rs      导入/导出主机（文件 + ~/.ssh/config）；rfd 原生文件对话框
 ```
 
 ### 前端 `frontend/src/`
@@ -115,7 +118,7 @@ components/
   ForwardRow.tsx     二级：状态 + [连接|断开|编辑|删除]
   StatusBadge.tsx    运行/停止状态徽标
   LogTable.tsx       日志表
-  dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/ConnectionError/CriticalError 弹窗
+  dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/ConnectionError/CriticalError/SelectHosts/ImportConflict 弹窗
   ui/ button card input select
 ```
 
@@ -130,6 +133,10 @@ components/
 | | `save_host(host) -> HostView` | 不校验参数；可用性留到连接运行时判断；保存即刷新修改时间 |
 | | `set_host_pinned(id, pinned) -> HostView` | 置顶/取消置顶；不改修改时间 |
 | | `delete_host(id)` | 先断开其下所有运行中的转发 |
+| 导入导出 | `read_import_file -> [Host]` / `read_import_ssh_config -> [Host]` | 选文件/读 ~/.ssh/config 解析为主机供前端勾选 |
+| | `import_hosts(hosts, strategy) -> ImportResult` | 按 sshHost 去重；strategy=""探测冲突、overwrite、skip |
+| | `export_hosts_to_file(hostIds) -> bool` | 选文件导出完整主机（含转发）|
+| | `export_hosts_to_ssh_config(hostIds)` | 写 ~/.ssh/config 托管区块（仅 ssh 可解析字段）|
 | 转发 | `save_forward(hostId, forward) -> HostView` | 不校验参数、不查端口占用；均留到连接时判断 |
 | | `delete_forward(hostId, forwardId)` | |
 | | `connect_forward(hostId, forwardId)` | 复用父主机参数；先 probe |
@@ -170,6 +177,10 @@ remote 模式监听在远端，本机不检查。
 - 用户主动断开 / 关闭 keepConnected → 不重连。
 
 应用退出（`RunEvent::ExitRequested`）时清理所有由本程序启动的转发子进程。
+
+编辑配置时的自动重连（`restart_forward`：复用暂存密码，先停后起）：
+- `save_host`：主机 IP 或用户变化 → 重启该主机下所有运行中的转发。
+- `save_forward`：某条转发的模式/监听/目标 ip 或端口变化且正在运行 → 仅重连该条。
 
 ### 一次性密码连接
 

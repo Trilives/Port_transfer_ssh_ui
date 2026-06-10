@@ -29,10 +29,21 @@ export interface Host {
   sshUser: string;
   identityFile: string;
   extraOptions: string;
+  // 跳板机（ProxyJump），可空。形如 user@jump-host:port，多级用逗号分隔。
+  proxyJump: string;
   forwards: Forward[];
   pinned: boolean;
   // 视图字段：最后修改时间（Unix 毫秒），列表排序用
   updatedAt?: number;
+}
+
+/** 导入结果：status="conflict" 时附带重复主机名，需用户选择覆盖策略。 */
+export interface ImportResult {
+  status: "done" | "conflict";
+  duplicates: string[];
+  added: number;
+  overwritten: number;
+  skipped: number;
 }
 
 export interface AppSettings {

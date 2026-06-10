@@ -77,6 +77,9 @@ pub struct Host {
     pub ssh_user: String,
     pub identity_file: String,
     pub extra_options: String,
+    /// 跳板机（ProxyJump）；可空。形如 `user@jump-host:port`，多级用逗号分隔。
+    #[serde(default)]
+    pub proxy_jump: String,
     #[serde(default)]
     pub forwards: Vec<Forward>,
     /// 是否置顶；置顶的主机排在列表最前。
@@ -97,6 +100,7 @@ impl Default for Host {
             ssh_user: String::new(),
             identity_file: String::new(),
             extra_options: String::new(),
+            proxy_jump: String::new(),
             forwards: Vec::new(),
             pinned: false,
             updated_at: 0,
@@ -124,6 +128,7 @@ pub struct HostView {
     pub ssh_user: String,
     pub identity_file: String,
     pub extra_options: String,
+    pub proxy_jump: String,
     pub forwards: Vec<ForwardView>,
     pub pinned: bool,
     pub updated_at: i64,

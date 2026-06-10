@@ -1,6 +1,6 @@
 [package]
 name = "ssh-port-forwarder"
-version = "0.2.2"
+version = "0.2.3"
 description = "A modern visual SSH port forwarding manager for Windows."
 authors = ["Codex"]
 edition = "2021"
@@ -15,6 +15,7 @@ tauri-build = { version = "2.0", features = [] }
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 directories = "5"
+rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 shell-words = "1"

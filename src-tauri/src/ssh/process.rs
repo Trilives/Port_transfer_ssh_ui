@@ -72,6 +72,21 @@ pub fn start_tunnel(
     Ok(())
 }
 
+/// 用新的 host/forward 参数重启一条运行中的转发：沿用其暂存密码（若有），先停后起。
+pub fn restart_forward(
+    host: Host,
+    forward: Forward,
+    state: &AppState,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let password = {
+        let tunnels = state.tunnels.lock().map_err(lock_error)?;
+        tunnels.get(&forward.id).and_then(|tunnel| tunnel.password.clone())
+    };
+    stop_tunnel(&forward.id, state, Some(app))?;
+    start_tunnel(host, forward, state, app.clone(), password)
+}
+
 pub fn stop_tunnel(forward_id: &str, state: &AppState, app: Option<&AppHandle>) -> Result<(), String> {
     let mut tunnels = state.tunnels.lock().map_err(lock_error)?;
     if let Some(tunnel) = tunnels.get_mut(forward_id) {

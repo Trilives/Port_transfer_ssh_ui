@@ -4,3 +4,4 @@ pub mod hosts;
 pub mod keys;
 pub mod settings;
 pub mod system;
+pub mod transfer;

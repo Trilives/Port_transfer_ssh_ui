@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::model::{Forward, HostView, TunnelStatus};
 use crate::portcheck::detect_conflict;
-use crate::ssh::process::{start_tunnel, stop_tunnel};
+use crate::ssh::process::{restart_forward, start_tunnel, stop_tunnel};
 use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
@@ -40,12 +40,19 @@ pub fn save_forward(
         forward.id = Uuid::new_v4().to_string();
     }
 
+    // 记录旧的隧道关键参数，用于判断运行中的转发是否需要重连。
+    let mut tunnel_changed = false;
     let mut hosts = state.hosts.lock().map_err(lock_error)?;
     let host = hosts
         .iter_mut()
         .find(|item| item.id == host_id)
         .ok_or_else(|| "Host not found.".to_string())?;
     if let Some(existing) = host.forwards.iter_mut().find(|item| item.id == forward.id) {
+        tunnel_changed = existing.mode != forward.mode
+            || existing.bind_host.trim() != forward.bind_host.trim()
+            || existing.bind_port.trim() != forward.bind_port.trim()
+            || existing.target_host.trim() != forward.target_host.trim()
+            || existing.target_port.trim() != forward.target_port.trim();
         *existing = forward.clone();
     } else {
         host.forwards.push(forward.clone());
@@ -55,6 +62,18 @@ pub fn save_forward(
     write_json(state.hosts_path(), &*hosts)?;
     drop(hosts);
     state.add_log("info", format!("[{}/{}] forward saved", host_name, forward.name), Some(&app));
+
+    // 该条转发的 ip/端口/模式变化且正在运行 → 断开并用新参数重连这一条。
+    if tunnel_changed && matches!(state.status_for(&forward.id), TunnelStatus::Running) {
+        let host = state.find_host(&host_id)?;
+        if let Err(err) = restart_forward(host, forward.clone(), state.inner(), &app) {
+            state.add_log(
+                "warning",
+                format!("[{}/{}] reconnect after edit failed: {}", host_name, forward.name, err),
+                Some(&app),
+            );
+        }
+    }
     Ok(state.host_view(state.find_host(&host_id)?))
 }
 

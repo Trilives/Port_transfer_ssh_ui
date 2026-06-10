@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, Forward, Host, LogEntry } from "./types";
+import type { AppSettings, Forward, Host, ImportResult, LogEntry } from "./types";
 
 export const api = {
   // 主机（一级）
@@ -7,6 +7,13 @@ export const api = {
   saveHost: (host: Host) => invoke<Host>("save_host", { host }),
   setHostPinned: (id: string, pinned: boolean) => invoke<Host>("set_host_pinned", { id, pinned }),
   deleteHost: (id: string) => invoke<void>("delete_host", { id }),
+
+  // 导入 / 导出
+  readImportFile: () => invoke<Host[]>("read_import_file"),
+  readImportSshConfig: () => invoke<Host[]>("read_import_ssh_config"),
+  importHosts: (hosts: Host[], strategy: string) => invoke<ImportResult>("import_hosts", { hosts, strategy }),
+  exportHostsToFile: (hostIds: string[]) => invoke<boolean>("export_hosts_to_file", { hostIds }),
+  exportHostsToSshConfig: (hostIds: string[]) => invoke<void>("export_hosts_to_ssh_config", { hostIds }),
 
   // 端口转发（二级）
   saveForward: (hostId: string, forward: Forward) => invoke<Host>("save_forward", { hostId, forward }),

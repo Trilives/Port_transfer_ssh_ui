@@ -20,6 +20,13 @@ fn push_identity_and_extra(host: &Host, command: &mut Vec<String>) -> Result<(),
     Ok(())
 }
 
+/// 跳板机：非空时加 `-J <proxyJump>`。需在 destination 之前。
+fn push_proxy_jump(host: &Host, command: &mut Vec<String>) {
+    if !host.proxy_jump.trim().is_empty() {
+        command.extend(["-J".to_string(), host.proxy_jump.trim().to_string()]);
+    }
+}
+
 /// 后台端口转发命令：`ssh -N -T … -L/-R/-D … user@host`。
 pub fn build_ssh_command(host: &Host, forward: &Forward) -> Result<Vec<String>, String> {
     let mut command = vec![
@@ -36,6 +43,7 @@ pub fn build_ssh_command(host: &Host, forward: &Forward) -> Result<Vec<String>, 
         empty_default(&host.ssh_port, "22").to_string(),
     ];
     push_identity_and_extra(host, &mut command)?;
+    push_proxy_jump(host, &mut command);
 
     let bind = empty_default(&forward.bind_host, "127.0.0.1");
     match forward.mode {
@@ -84,6 +92,7 @@ pub fn build_probe_command(host: &Host) -> Result<Vec<String>, String> {
         empty_default(&host.ssh_port, "22").to_string(),
     ];
     push_identity_and_extra(host, &mut command)?;
+    push_proxy_jump(host, &mut command);
     command.push(destination(host));
     command.push("exit 0".to_string());
     Ok(command)
@@ -104,6 +113,7 @@ pub fn build_key_upload_command(host: &Host) -> Result<Vec<String>, String> {
     if !host.identity_file.trim().is_empty() {
         command.extend(["-i".to_string(), host.identity_file.trim().to_string()]);
     }
+    push_proxy_jump(host, &mut command);
     command.push(destination(host));
     command.push(
         "umask 077; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && key=$(cat) && { grep -qxF \"$key\" ~/.ssh/authorized_keys || printf '%s\\n' \"$key\" >> ~/.ssh/authorized_keys; }"
@@ -140,6 +150,7 @@ pub fn build_send_command(
         empty_default(&host.ssh_port, "22").to_string(),
     ];
     push_identity_and_extra(host, &mut command)?;
+    push_proxy_jump(host, &mut command);
     command.push(destination(host));
     command.push(remote_command.to_string());
     Ok(command)
@@ -153,6 +164,7 @@ pub fn build_terminal_args(host: &Host) -> Result<Vec<String>, String> {
         empty_default(&host.ssh_port, "22").to_string(),
     ];
     push_identity_and_extra(host, &mut command)?;
+    push_proxy_jump(host, &mut command);
     command.push(destination(host));
     Ok(command)
 }

@@ -11,9 +11,11 @@ import {
   ForwardDialog,
   HostDialog,
   HostKeyChangedDialog,
+  ImportConflictDialog,
   InputPasswordDialog,
   KeyUploadDialog,
   PasswordDialog,
+  SelectHostsDialog,
   SendCommandDialog,
   SshMissingDialog,
 } from "./components/dialogs";
@@ -36,6 +38,7 @@ const newHost = (): Host => ({
   sshUser: "",
   identityFile: "",
   extraOptions: "",
+  proxyJump: "",
   forwards: [],
   pinned: false,
 });
@@ -78,13 +81,20 @@ export function App() {
   const [hostKeyFetching, setHostKeyFetching] = useState(false);
   const [criticalError, setCriticalError] = useState<CriticalErrorPayload | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  // 导入/导出：勾选主机弹窗与重复冲突弹窗。
+  const [selectHosts, setSelectHosts] = useState<{
+    mode: "import" | "export-file" | "export-config";
+    items: Host[];
+    selected: Set<string>;
+  } | null>(null);
+  const [importConflict, setImportConflict] = useState<{ duplicates: string[]; hosts: Host[] } | null>(null);
   const [deleteHostTarget, setDeleteHostTarget] = useState<Host | null>(null);
   const [sshMissing, setSshMissing] = useState(false);
   const shownCriticalErrors = useRef(new Set<string>());
 
   const language = settings.language;
   const modalOpen = Boolean(
-    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || deleteHostTarget || sshMissing,
+    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || selectHosts || importConflict || deleteHostTarget || sshMissing,
   );
 
   useEffect(() => {
@@ -207,6 +217,86 @@ export function App() {
     }
   }
 
+  // ---- Import / Export ----
+  function openSelectHosts(mode: "import" | "export-file" | "export-config", items: Host[]) {
+    setError("");
+    setSelectHosts({ mode, items, selected: new Set(items.map((h) => h.id)) });
+  }
+
+  async function importFromFile() {
+    try {
+      const parsed = await api.readImportFile();
+      if (parsed.length === 0) return; // 用户取消或空文件
+      openSelectHosts("import", parsed);
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function importFromConfig() {
+    try {
+      openSelectHosts("import", await api.readImportSshConfig());
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  function toggleSelectHost(id: string) {
+    setSelectHosts((prev) => {
+      if (!prev) return prev;
+      const selected = new Set(prev.selected);
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      return { ...prev, selected };
+    });
+  }
+
+  async function confirmSelectHosts() {
+    if (!selectHosts) return;
+    const { mode, items, selected } = selectHosts;
+    const chosen = items.filter((h) => selected.has(h.id));
+    setSelectHosts(null);
+    try {
+      if (mode === "import") {
+        const result = await api.importHosts(chosen, "");
+        if (result.status === "conflict") {
+          setImportConflict({ duplicates: result.duplicates, hosts: chosen });
+          return;
+        }
+        await finishImport(result);
+      } else if (mode === "export-file") {
+        const saved = await api.exportHostsToFile(chosen.map((h) => h.id));
+        if (saved) setNotice(t(language, "exportDone"));
+      } else {
+        await api.exportHostsToSshConfig(chosen.map((h) => h.id));
+        setNotice(t(language, "exportConfigDone"));
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function applyImportStrategy(strategy: "overwrite" | "skip") {
+    if (!importConflict) return;
+    const hosts = importConflict.hosts;
+    setImportConflict(null);
+    try {
+      await finishImport(await api.importHosts(hosts, strategy));
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function finishImport(result: { added: number; overwritten: number; skipped: number }) {
+    await refreshHosts();
+    setNotice(
+      t(language, "importDone")
+        .replace("{added}", String(result.added))
+        .replace("{overwritten}", String(result.overwritten))
+        .replace("{skipped}", String(result.skipped)),
+    );
+  }
+
   async function confirmDeleteHost() {
     if (!deleteHostTarget) return;
     const host = deleteHostTarget;
@@ -229,10 +319,10 @@ export function App() {
       setError("");
       await refreshHosts();
       expand(hostId);
-      // 勾选了保持连接：保存后自动启动该连接（连接流程会在需要时弹密码并暂存用于重连）。
+      // 勾选了保持连接且该转发当前未运行：保存后自动启动（运行中的编辑已由后端重连，跳过避免重复）。
       if (draft.keepConnected) {
         const forward = updatedHost.forwards.find((item) => item.id === draft.id);
-        if (forward) await connectForward(updatedHost, forward);
+        if (forward && forward.status !== "running") await connectForward(updatedHost, forward);
       }
     } catch (err) {
       setError(String(err));
@@ -499,6 +589,10 @@ export function App() {
                 onDisconnectForward={disconnectForward}
                 onEditForward={(host, forward) => setForwardDialog({ hostId: host.id, draft: forward })}
                 onDeleteForward={deleteForward}
+                onImportFromFile={importFromFile}
+                onImportFromConfig={importFromConfig}
+                onExportToFile={() => openSelectHosts("export-file", hosts)}
+                onExportToConfig={() => openSelectHosts("export-config", hosts)}
               />
             )}
             {page === "logs" && <LogsPage language={language} logs={logs} />}
@@ -602,6 +696,29 @@ export function App() {
       )}
       {connectError && (
         <ConnectionErrorDialog language={language} message={connectError} onClose={() => setConnectError(null)} />
+      )}
+      {selectHosts && (
+        <SelectHostsDialog
+          language={language}
+          title={t(language, selectHosts.mode === "import" ? "selectHostsToImport" : "selectHostsToExport")}
+          confirmLabel={t(language, selectHosts.mode === "import" ? "confirmImport" : "confirmExport")}
+          items={selectHosts.items.map((h) => ({ id: h.id, name: h.name, sshHost: h.sshHost }))}
+          selected={selectHosts.selected}
+          onToggle={toggleSelectHost}
+          onSelectAll={() => setSelectHosts((prev) => (prev ? { ...prev, selected: new Set(prev.items.map((h) => h.id)) } : prev))}
+          onClearAll={() => setSelectHosts((prev) => (prev ? { ...prev, selected: new Set() } : prev))}
+          onCancel={() => setSelectHosts(null)}
+          onConfirm={confirmSelectHosts}
+        />
+      )}
+      {importConflict && (
+        <ImportConflictDialog
+          language={language}
+          duplicates={importConflict.duplicates}
+          onCancel={() => setImportConflict(null)}
+          onOverwrite={() => applyImportStrategy("overwrite")}
+          onSkip={() => applyImportStrategy("skip")}
+        />
       )}
       {deleteHostTarget && (
         <ConfirmDialog

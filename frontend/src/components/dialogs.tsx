@@ -69,6 +69,14 @@ export function HostDialog(props: {
           />
         </div>
         <div className="col-span-2">
+          <Field
+            label={t(lang, "proxyJump")}
+            value={props.draft.proxyJump}
+            onChange={(v) => update("proxyJump", v)}
+            hint={t(lang, "proxyJumpHint")}
+          />
+        </div>
+        <div className="col-span-2">
           <Field label={t(lang, "extraOptions")} value={props.draft.extraOptions} onChange={(v) => update("extraOptions", v)} />
         </div>
       </div>
@@ -361,6 +369,92 @@ export function SshMissingDialog(props: {
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
           <Button onClick={props.onInstall}>{t(lang, "install")}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export function SelectHostsDialog(props: {
+  language: Language;
+  title: string;
+  confirmLabel: string;
+  items: { id: string; name: string; sshHost: string }[];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const lang = props.language;
+  const empty = props.items.length === 0;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-lg border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
+        <DialogHeader title={props.title} onClose={props.onCancel} />
+        {empty ? (
+          <p className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400 dark:border-slate-800 dark:text-slate-500">
+            {t(lang, "noHostsToImport")}
+          </p>
+        ) : (
+          <>
+            <div className="mb-3 flex gap-3 text-xs">
+              <button onClick={props.onSelectAll} className="text-blue-600 hover:underline dark:text-blue-300">{t(lang, "selectAll")}</button>
+              <button onClick={props.onClearAll} className="text-slate-500 hover:underline dark:text-slate-400">{t(lang, "clearAll")}</button>
+            </div>
+            <div className="grid max-h-72 gap-1 overflow-auto">
+              {props.items.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+                >
+                  <input
+                    type="checkbox"
+                    checked={props.selected.has(item.id)}
+                    onChange={() => props.onToggle(item.id)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-slate-800 dark:text-slate-100">{item.name || "(unnamed)"}</span>
+                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{item.sshHost || "?"}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+        <div className="mt-5 flex justify-end gap-3">
+          <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
+          <Button onClick={props.onConfirm} disabled={empty || props.selected.size === 0}>{props.confirmLabel}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export function ImportConflictDialog(props: {
+  language: Language;
+  duplicates: string[];
+  onCancel: () => void;
+  onOverwrite: () => void;
+  onSkip: () => void;
+}) {
+  const lang = props.language;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-amber-300 bg-white dark:border-amber-800 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>⚠️ {t(lang, "importConflictTitle")}</CardTitle>
+          <CardDescription>{t(lang, "importConflictDesc")}</CardDescription>
+        </CardHeader>
+        <pre className="max-h-40 overflow-auto rounded-2xl bg-slate-100 p-3 text-sm leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          {props.duplicates.join("\n")}
+        </pre>
+        <div className="mt-4 flex flex-wrap justify-end gap-3">
+          <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
+          <Button variant="secondary" onClick={props.onSkip}>{t(lang, "skipDuplicates")}</Button>
+          <Button variant="danger" onClick={props.onOverwrite}>{t(lang, "overwriteAll")}</Button>
         </div>
       </Card>
     </div>
