@@ -87,7 +87,11 @@ export function App() {
     items: Host[];
     selected: Set<string>;
   } | null>(null);
-  const [importConflict, setImportConflict] = useState<{ duplicates: string[]; hosts: Host[] } | null>(null);
+  const [importConflict, setImportConflict] = useState<{
+    duplicates: string[];
+    hosts: Host[];
+    mode: "import" | "export-config";
+  } | null>(null);
   const [deleteHostTarget, setDeleteHostTarget] = useState<Host | null>(null);
   const [sshMissing, setSshMissing] = useState(false);
   const shownCriticalErrors = useRef(new Set<string>());
@@ -267,7 +271,7 @@ export function App() {
       if (mode === "import") {
         const result = await api.importHosts(chosen, "");
         if (result.status === "conflict") {
-          setImportConflict({ duplicates: result.duplicates, hosts: chosen });
+          setImportConflict({ duplicates: result.duplicates, hosts: chosen, mode: "import" });
           return;
         }
         await finishImport(result);
@@ -275,7 +279,11 @@ export function App() {
         const saved = await api.exportHostsToFile(chosen.map((h) => h.id));
         if (saved) setNotice(t(language, "exportDone"));
       } else {
-        await api.exportHostsToSshConfig(chosen.map((h) => h.id));
+        const result = await api.exportHostsToSshConfig(chosen.map((h) => h.id), "");
+        if (result.status === "conflict") {
+          setImportConflict({ duplicates: result.duplicates, hosts: chosen, mode: "export-config" });
+          return;
+        }
         setNotice(t(language, "exportConfigDone"));
       }
     } catch (err) {
@@ -285,10 +293,15 @@ export function App() {
 
   async function applyImportStrategy(strategy: "overwrite" | "skip") {
     if (!importConflict) return;
-    const hosts = importConflict.hosts;
+    const { hosts, mode } = importConflict;
     setImportConflict(null);
     try {
-      await finishImport(await api.importHosts(hosts, strategy));
+      if (mode === "export-config") {
+        await api.exportHostsToSshConfig(hosts.map((h) => h.id), strategy);
+        setNotice(t(language, "exportConfigDone"));
+      } else {
+        await finishImport(await api.importHosts(hosts, strategy));
+      }
     } catch (err) {
       setError(String(err));
     }
@@ -723,6 +736,7 @@ export function App() {
         <ImportConflictDialog
           language={language}
           duplicates={importConflict.duplicates}
+          description={importConflict.mode === "export-config" ? t(language, "exportConfigConflictDesc") : undefined}
           onCancel={() => setImportConflict(null)}
           onOverwrite={() => applyImportStrategy("overwrite")}
           onSkip={() => applyImportStrategy("skip")}

@@ -436,6 +436,7 @@ export function SelectHostsDialog(props: {
 export function ImportConflictDialog(props: {
   language: Language;
   duplicates: string[];
+  description?: string;
   onCancel: () => void;
   onOverwrite: () => void;
   onSkip: () => void;
@@ -446,7 +447,7 @@ export function ImportConflictDialog(props: {
       <Card className="w-full max-w-md border-amber-300 bg-white dark:border-amber-800 dark:bg-slate-950">
         <CardHeader>
           <CardTitle>⚠️ {t(lang, "importConflictTitle")}</CardTitle>
-          <CardDescription>{t(lang, "importConflictDesc")}</CardDescription>
+          <CardDescription>{props.description ?? t(lang, "importConflictDesc")}</CardDescription>
         </CardHeader>
         <pre className="max-h-40 overflow-auto rounded-2xl bg-slate-100 p-3 text-sm leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
           {props.duplicates.join("\n")}

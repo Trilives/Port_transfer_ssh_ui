@@ -6,7 +6,10 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::model::Host;
-use crate::sshconfig::{parse_ssh_config, render_managed_block, ssh_config_path, upsert_managed_block};
+use crate::sshconfig::{
+    parse_ssh_config, render_managed_block, ssh_config_path, strip_managed_block,
+    upsert_managed_block,
+};
 use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
@@ -191,25 +194,75 @@ pub fn export_hosts_to_file(
 }
 
 /// 导出选中主机到本机 `~/.ssh/config` 的托管区块（只写 ssh 可解析的部分）。
+/// 与导入一致地按 IP 查重：重复指与用户自己写的条目（托管区块以外）撞 IP。
+/// strategy: "" 探测冲突、"overwrite" 全部写入、"skip" 仅写不重复的。
 #[tauri::command]
 pub fn export_hosts_to_ssh_config(
     host_ids: Vec<String>,
+    strategy: String,
     state: State<AppState>,
     app: AppHandle,
-) -> Result<(), String> {
+) -> Result<ImportResult, String> {
     let hosts = selected_hosts(state.inner(), &host_ids)?;
     let path = ssh_config_path()?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
     let existing = fs::read_to_string(&path).unwrap_or_default();
-    let block = render_managed_block(&hosts);
+    // 托管区块由本程序整体重写，不算冲突；只跟区块以外的用户条目查重。
+    let outside_ips: std::collections::HashSet<String> = parse_ssh_config(&strip_managed_block(&existing))
+        .iter()
+        .map(dedup_key)
+        .filter(|key| !key.is_empty())
+        .collect();
+
+    let duplicates: Vec<String> = hosts
+        .iter()
+        .filter(|host| outside_ips.contains(&dedup_key(host)))
+        .map(|host| host.name.clone())
+        .collect();
+
+    if strategy.is_empty() && !duplicates.is_empty() {
+        return Ok(ImportResult {
+            status: "conflict".to_string(),
+            duplicates,
+            added: 0,
+            overwritten: 0,
+            skipped: 0,
+        });
+    }
+
+    let mut to_write: Vec<Host> = Vec::new();
+    let mut added = 0;
+    let mut overwritten = 0;
+    let mut skipped = 0;
+    for host in &hosts {
+        if outside_ips.contains(&dedup_key(host)) {
+            if strategy == "overwrite" {
+                to_write.push(host.clone());
+                overwritten += 1;
+            } else {
+                skipped += 1;
+            }
+        } else {
+            to_write.push(host.clone());
+            added += 1;
+        }
+    }
+
+    let block = render_managed_block(&to_write);
     let updated = upsert_managed_block(&existing, &block);
     fs::write(&path, updated).map_err(|err| err.to_string())?;
     state.add_log(
         "info",
-        format!("{} hosts exported to {}", hosts.len(), path.display()),
+        format!("hosts exported to ssh config: +{added} ~{overwritten} skip{skipped}"),
         Some(&app),
     );
-    Ok(())
+    Ok(ImportResult {
+        status: "done".to_string(),
+        duplicates: Vec::new(),
+        added,
+        overwritten,
+        skipped,
+    })
 }

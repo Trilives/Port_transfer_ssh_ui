@@ -132,6 +132,23 @@ pub fn render_managed_block(hosts: &[Host]) -> String {
     out
 }
 
+/// 取出托管区块以外的内容（用户自己写的条目），用于查重时排除本程序托管的部分。
+pub fn strip_managed_block(content: &str) -> String {
+    let begin = content.find(BLOCK_BEGIN);
+    let end = content.find(BLOCK_END);
+    if let (Some(begin), Some(end)) = (begin, end) {
+        if end > begin {
+            let after = end + BLOCK_END.len();
+            let tail = content[after..].strip_prefix('\n').unwrap_or(&content[after..]);
+            let mut result = String::new();
+            result.push_str(&content[..begin]);
+            result.push_str(tail);
+            return result;
+        }
+    }
+    content.to_string()
+}
+
 /// 用新的托管区块替换已有区块；没有则追加到文件末尾。区块外内容原样保留。
 pub fn upsert_managed_block(existing: &str, block: &str) -> String {
     let begin = existing.find(BLOCK_BEGIN);

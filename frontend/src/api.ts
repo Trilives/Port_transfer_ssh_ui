@@ -13,7 +13,8 @@ export const api = {
   readImportSshConfig: () => invoke<Host[]>("read_import_ssh_config"),
   importHosts: (hosts: Host[], strategy: string) => invoke<ImportResult>("import_hosts", { hosts, strategy }),
   exportHostsToFile: (hostIds: string[]) => invoke<boolean>("export_hosts_to_file", { hostIds }),
-  exportHostsToSshConfig: (hostIds: string[]) => invoke<void>("export_hosts_to_ssh_config", { hostIds }),
+  exportHostsToSshConfig: (hostIds: string[], strategy: string) =>
+    invoke<ImportResult>("export_hosts_to_ssh_config", { hostIds, strategy }),
 
   // 端口转发（二级）
   saveForward: (hostId: string, forward: Forward) => invoke<Host>("save_forward", { hostId, forward }),
