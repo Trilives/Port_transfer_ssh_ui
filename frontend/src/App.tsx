@@ -118,6 +118,13 @@ export function App() {
     };
   }, [page, modalOpen]);
 
+  // 提示信息几分钟后自动消失（也可手动叉掉）；错误信息保留，需手动关闭。
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 3 * 60 * 1000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     void listen<CriticalErrorPayload>("critical-error", (event) => {
@@ -544,8 +551,9 @@ export function App() {
             </div>
           )}
           {notice && (
-            <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-200">
-              {notice}
+            <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <span className="whitespace-pre-wrap">{notice}</span>
+              <button onClick={() => setNotice("")} className="shrink-0 text-emerald-400 hover:text-emerald-600">✕</button>
             </div>
           )}
           <div className="animate-[fadeIn_220ms_ease-out]">
