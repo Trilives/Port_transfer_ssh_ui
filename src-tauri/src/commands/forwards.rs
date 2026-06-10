@@ -6,7 +6,7 @@ use crate::portcheck::detect_conflict;
 use crate::ssh::process::{start_tunnel, stop_tunnel};
 use crate::state::AppState;
 use crate::store::write_json;
-use crate::util::lock_error;
+use crate::util::{lock_error, now_millis};
 use crate::validate::validate_forward;
 
 fn language_is_zh(state: &AppState) -> bool {
@@ -35,12 +35,10 @@ pub fn save_forward(
     state: State<AppState>,
     app: AppHandle,
 ) -> Result<HostView, String> {
-    validate_forward(&forward)?;
+    // 新建/编辑转发时不校验参数，也不做端口占用检查；这些都留到「连接」运行时判断。
     if forward.id.trim().is_empty() {
         forward.id = Uuid::new_v4().to_string();
     }
-    // 新建端口前确认端口未被占用。
-    ensure_port_free(state.inner(), &forward)?;
 
     let mut hosts = state.hosts.lock().map_err(lock_error)?;
     let host = hosts
@@ -52,6 +50,7 @@ pub fn save_forward(
     } else {
         host.forwards.push(forward.clone());
     }
+    host.updated_at = now_millis();
     let host_name = host.name.clone();
     write_json(state.hosts_path(), &*hosts)?;
     drop(hosts);
@@ -81,6 +80,7 @@ pub fn delete_forward(
         .map(|item| item.name.clone())
         .unwrap_or_else(|| forward_id.clone());
     host.forwards.retain(|item| item.id != forward_id);
+    host.updated_at = now_millis();
     let host_name = host.name.clone();
     write_json(state.hosts_path(), &*hosts)?;
     drop(hosts);

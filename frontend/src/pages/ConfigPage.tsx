@@ -13,6 +13,7 @@ export function ConfigPage(props: {
   onNewHost: () => void;
   onEditHost: (host: Host) => void;
   onDeleteHost: (host: Host) => void;
+  onTogglePin: (host: Host) => void;
   onSendCommand: (host: Host) => void;
   onOpenTerminal: (host: Host) => void;
   onUploadKey: (host: Host) => void;
@@ -55,6 +56,7 @@ export function ConfigPage(props: {
                 onNewForward={() => props.onNewForward(host)}
                 onEditHost={() => props.onEditHost(host)}
                 onDeleteHost={() => props.onDeleteHost(host)}
+                onTogglePin={() => props.onTogglePin(host)}
                 onConnectForward={(forward) => props.onConnectForward(host, forward)}
                 onDisconnectForward={(forward) => props.onDisconnectForward(host, forward)}
                 onEditForward={(forward) => props.onEditForward(host, forward)}

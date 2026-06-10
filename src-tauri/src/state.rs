@@ -116,6 +116,14 @@ impl AppState {
         }
     }
 
+    /// 当前界面语言是否为简体中文（用于本地化后端错误提示）；锁失败时默认中文。
+    pub fn is_zh(&self) -> bool {
+        self.settings
+            .lock()
+            .map(|settings| settings.language == "zh-CN")
+            .unwrap_or(true)
+    }
+
     pub fn status_for(&self, forward_id: &str) -> TunnelStatus {
         let mut tunnels = self.tunnels.lock().unwrap();
         if let Some(tunnel) = tunnels.get_mut(forward_id) {
@@ -152,6 +160,8 @@ impl AppState {
             identity_file: host.identity_file,
             extra_options: host.extra_options,
             forwards,
+            pinned: host.pinned,
+            updated_at: host.updated_at,
         }
     }
 

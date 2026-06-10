@@ -30,6 +30,9 @@ export interface Host {
   identityFile: string;
   extraOptions: string;
   forwards: Forward[];
+  pinned: boolean;
+  // 视图字段：最后修改时间（Unix 毫秒），列表排序用
+  updatedAt?: number;
 }
 
 export interface AppSettings {

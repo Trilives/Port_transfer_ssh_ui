@@ -5,6 +5,7 @@ export const api = {
   // 主机（一级）
   listHosts: () => invoke<Host[]>("list_hosts"),
   saveHost: (host: Host) => invoke<Host>("save_host", { host }),
+  setHostPinned: (id: string, pinned: boolean) => invoke<Host>("set_host_pinned", { id, pinned }),
   deleteHost: (id: string) => invoke<void>("delete_host", { id }),
 
   // 端口转发（二级）

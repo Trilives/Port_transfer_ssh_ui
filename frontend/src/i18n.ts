@@ -12,7 +12,7 @@ const text = {
 
     // 导航
     dashboard: "主页",
-    config: "配置",
+    config: "历史链接",
     logs: "日志",
     settings: "设置",
     guide: "使用说明",
@@ -34,6 +34,9 @@ const text = {
     newHost: "新建主机",
     editHost: "编辑主机",
     deleteHost: "删除主机",
+    pin: "置顶",
+    unpin: "取消置顶",
+    pinned: "已置顶",
     sendCommand: "发送指令",
     openTerminal: "打开终端",
     uploadKey: "上传密钥",
@@ -67,9 +70,9 @@ const text = {
 
     // 转发字段
     bindHost: "监听地址",
-    bindPort: "监听端口",
+    bindPort: "本机访问端口",
     targetHost: "目标地址",
-    targetPort: "目标端口",
+    targetPort: "远程待映射端口",
     keepConnected: "保持连接并自动重连",
 
     // 主机弹窗
@@ -117,6 +120,10 @@ const text = {
     criticalDesc: "已停止自动重试。请修复错误后手动重新连接。",
     close: "关闭",
 
+    // 连接失败弹窗（探测阶段：不可达 / IP / 端口 / 网络等）
+    connectFailedTitle: "无法建立连接",
+    connectFailedDesc: "请根据下方原因检查主机连接参数后重试。",
+
     // 未安装 SSH 弹窗
     sshMissingTitle: "未检测到 OpenSSH 客户端",
     sshMissingDesc: "本程序依赖 Windows 自带的 OpenSSH 客户端（ssh.exe）。是否现在安装？安装需要管理员权限，会从 Windows Update 下载。",
@@ -152,7 +159,7 @@ const text = {
     subtitle: "Host-centric management of SSH connections, port forwards, terminals, and logs.",
 
     dashboard: "Home",
-    config: "Config",
+    config: "History",
     logs: "Logs",
     settings: "Settings",
     guide: "Guide",
@@ -172,6 +179,9 @@ const text = {
     newHost: "New Host",
     editHost: "Edit Host",
     deleteHost: "Delete Host",
+    pin: "Pin",
+    unpin: "Unpin",
+    pinned: "Pinned",
     sendCommand: "Send Command",
     openTerminal: "Open Terminal",
     uploadKey: "Upload Key",
@@ -202,9 +212,9 @@ const text = {
     extraOptions: "Extra SSH Options",
 
     bindHost: "Bind Host",
-    bindPort: "Bind Port",
+    bindPort: "Local Access Port",
     targetHost: "Target Host",
-    targetPort: "Target Port",
+    targetPort: "Remote Port to Map",
     keepConnected: "Keep connected and reconnect automatically",
 
     hostDialogTitle: "Host Connection",
@@ -246,6 +256,9 @@ const text = {
     criticalTitle: "Critical Connection Error",
     criticalDesc: "Automatic retries stopped. Fix the error, then reconnect manually.",
     close: "Close",
+
+    connectFailedTitle: "Cannot Connect",
+    connectFailedDesc: "Check the host connection settings based on the reason below, then retry.",
 
     sshMissingTitle: "OpenSSH Client Not Found",
     sshMissingDesc: "This app requires the built-in Windows OpenSSH client (ssh.exe). Install it now? Administrator rights are required and it downloads from Windows Update.",

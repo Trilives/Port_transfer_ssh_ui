@@ -79,6 +79,12 @@ pub struct Host {
     pub extra_options: String,
     #[serde(default)]
     pub forwards: Vec<Forward>,
+    /// 是否置顶；置顶的主机排在列表最前。
+    #[serde(default)]
+    pub pinned: bool,
+    /// 最后修改时间（Unix 毫秒）；列表按其从新到旧排序。
+    #[serde(default)]
+    pub updated_at: i64,
 }
 
 impl Default for Host {
@@ -92,6 +98,8 @@ impl Default for Host {
             identity_file: String::new(),
             extra_options: String::new(),
             forwards: Vec::new(),
+            pinned: false,
+            updated_at: 0,
         }
     }
 }
@@ -117,6 +125,8 @@ pub struct HostView {
     pub identity_file: String,
     pub extra_options: String,
     pub forwards: Vec<ForwardView>,
+    pub pinned: bool,
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

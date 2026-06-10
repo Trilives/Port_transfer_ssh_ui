@@ -367,6 +367,30 @@ export function SshMissingDialog(props: {
   );
 }
 
+export function ConnectionErrorDialog(props: {
+  language: Language;
+  message: string;
+  onClose: () => void;
+}) {
+  const lang = props.language;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-lg border-rose-200 bg-white dark:border-rose-900 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>{t(lang, "connectFailedTitle")}</CardTitle>
+          <CardDescription>{t(lang, "connectFailedDesc")}</CardDescription>
+        </CardHeader>
+        <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-100 p-4 text-sm leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          {props.message}
+        </pre>
+        <div className="mt-4 flex justify-end">
+          <Button onClick={props.onClose}>{t(lang, "close")}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export function CriticalErrorDialog(props: {
   language: Language;
   error: CriticalErrorPayload;

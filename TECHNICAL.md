@@ -23,10 +23,10 @@ src-tauri/src/
   model.rs           Host / Forward / 枚举 / AppSettings / LogEntry / View
   store.rs           read_json / write_json
   state.rs           AppState、ManagedTunnel、视图与查找方法、日志写入
-  validate.rs        validate_host / validate_forward
+  validate.rs        validate_host_connection / validate_forward（连接运行时校验）
   portcheck.rs       端口占用检测（netstat + tasklist）
   terminal.rs        open_terminal：外部 PowerShell 终端
-  ssh/               command / process / probe / keys
+  ssh/               command / diagnose / process / probe / keys
   commands/          hosts / forwards / exec / keys / settings（Tauri 命令）
 
 frontend/src/

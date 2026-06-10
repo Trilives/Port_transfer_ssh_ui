@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::model::{CriticalErrorPayload, Forward, Host};
 use crate::ssh::command::build_ssh_command;
+use crate::ssh::diagnose::{classify_ssh_failure, SshFailureKind};
 use crate::state::{AppState, ManagedTunnel};
 use crate::util::{lock_error, no_window};
 
@@ -153,14 +154,21 @@ fn watch_tunnel(forward_id: String, data_dir: PathBuf, app: AppHandle) {
             format!("[{}] exited with code {:?}: {}", label, code, detail)
         };
         if code == Some(255) {
-            state.add_log("error", message.clone(), Some(&app));
+            // 给关键错误标注具体原因（不可达 / 认证失败等），而不是一律按密码处理。
+            let kind = classify_ssh_failure(&stderr);
+            let critical_message = if kind == SshFailureKind::Unknown {
+                message.clone()
+            } else {
+                format!("{}\n\n{}", kind.reason(state.is_zh()), message)
+            };
+            state.add_log("error", critical_message.clone(), Some(&app));
             let _ = app.emit(
                 "critical-error",
                 CriticalErrorPayload {
                     host_id: host.id.clone(),
                     forward_id: forward.id.clone(),
                     name: label,
-                    message,
+                    message: critical_message,
                 },
             );
             // 致命错误：移除运行态，停止重连。

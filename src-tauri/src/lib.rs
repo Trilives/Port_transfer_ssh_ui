@@ -19,6 +19,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::hosts::list_hosts,
             commands::hosts::save_host,
+            commands::hosts::set_host_pinned,
             commands::hosts::delete_host,
             commands::forwards::save_forward,
             commands::forwards::delete_forward,

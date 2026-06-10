@@ -6,6 +6,7 @@ import { cn } from "./lib/utils";
 import { t } from "./i18n";
 import {
   ConfirmDialog,
+  ConnectionErrorDialog,
   CriticalErrorDialog,
   ForwardDialog,
   HostDialog,
@@ -36,6 +37,7 @@ const newHost = (): Host => ({
   identityFile: "",
   extraOptions: "",
   forwards: [],
+  pinned: false,
 });
 
 const newForward = (): Forward => ({
@@ -75,13 +77,14 @@ export function App() {
   const [hostKeyFingerprint, setHostKeyFingerprint] = useState("");
   const [hostKeyFetching, setHostKeyFetching] = useState(false);
   const [criticalError, setCriticalError] = useState<CriticalErrorPayload | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [deleteHostTarget, setDeleteHostTarget] = useState<Host | null>(null);
   const [sshMissing, setSshMissing] = useState(false);
   const shownCriticalErrors = useRef(new Set<string>());
 
   const language = settings.language;
   const modalOpen = Boolean(
-    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || deleteHostTarget || sshMissing,
+    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || deleteHostTarget || sshMissing,
   );
 
   useEffect(() => {
@@ -195,6 +198,15 @@ export function App() {
     }
   }
 
+  async function toggleHostPin(host: Host) {
+    try {
+      await api.setHostPinned(host.id, !host.pinned);
+      await refreshHosts();
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   async function confirmDeleteHost() {
     if (!deleteHostTarget) return;
     const host = deleteHostTarget;
@@ -256,7 +268,8 @@ export function App() {
       await refreshHosts();
     } catch (err) {
       setNotice("");
-      setError(String(err));
+      // 探测/连接失败（不可达、IP/端口、网络等）：用弹窗给出具体原因。
+      setConnectError(String(err));
     }
   }
 
@@ -301,7 +314,7 @@ export function App() {
       setKeyUploadPassword("");
     } catch (err) {
       setNotice("");
-      setError(String(err));
+      setConnectError(String(err));
     }
   }
 
@@ -471,6 +484,7 @@ export function App() {
                 onNewHost={() => setHostDialog(newHost())}
                 onEditHost={(host) => setHostDialog(host)}
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
+                onTogglePin={toggleHostPin}
                 onSendCommand={(host) => {
                   setSendCmd({ hostId: host.id, hostName: host.name });
                   setCommand("");
@@ -585,6 +599,9 @@ export function App() {
       )}
       {criticalError && (
         <CriticalErrorDialog language={language} error={criticalError} onClose={() => setCriticalError(null)} />
+      )}
+      {connectError && (
+        <ConnectionErrorDialog language={language} message={connectError} onClose={() => setConnectError(null)} />
       )}
       {deleteHostTarget && (
         <ConfirmDialog

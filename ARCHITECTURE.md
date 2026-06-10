@@ -48,6 +48,8 @@ Host  (一级目录 = SSH 服务器)
 ├─ sshUser: String
 ├─ identityFile: String     // 私钥文件路径，连接级；留空用默认 id_ed25519
 ├─ extraOptions: String     // 作用于该主机所有 ssh 操作的额外参数
+├─ pinned: bool             // 置顶；列表排序时优先
+├─ updatedAt: i64           // 最后修改时间（Unix 毫秒），列表按其从新到旧排序
 └─ forwards: Vec<Forward>   // 二级目录，嵌套存储
 
 Forward (二级目录 = 一条端口转发)
@@ -83,6 +85,7 @@ portcheck.rs       本机端口占用检测 + 占用进程名/PID（netstat + ta
 ssh/
   mod.rs           子模块再导出
   command.rs       build_ssh / build_probe / build_key_upload / build_send 命令构造
+  diagnose.rs      classify_ssh_failure：按 stderr 归类不可达/认证等失败并给本地化原因
   process.rs       start/stop/watch/cleanup tunnel、CREATE_NO_WINDOW、askpass helper
   probe.rs         probe_connection / get_host_fingerprint / remove_known_host
   keys.rs          ensure_public_key / resolve_identity_file / upload_key_to_remote
@@ -112,7 +115,7 @@ components/
   ForwardRow.tsx     二级：状态 + [连接|断开|编辑|删除]
   StatusBadge.tsx    运行/停止状态徽标
   LogTable.tsx       日志表
-  dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/CriticalError 弹窗
+  dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/ConnectionError/CriticalError 弹窗
   ui/ button card input select
 ```
 
@@ -123,10 +126,11 @@ components/
 
 | 域 | 命令 | 说明 |
 | --- | --- | --- |
-| 主机 | `list_hosts -> [HostView]` | 含每条转发的运行状态 |
-| | `save_host(host) -> HostView` | 只校验 SSH 连接参数，不要求转发参数 |
+| 主机 | `list_hosts -> [HostView]` | 含每条转发的运行状态；置顶优先、其余按修改时间从新到旧排序 |
+| | `save_host(host) -> HostView` | 不校验参数；可用性留到连接运行时判断；保存即刷新修改时间 |
+| | `set_host_pinned(id, pinned) -> HostView` | 置顶/取消置顶；不改修改时间 |
 | | `delete_host(id)` | 先断开其下所有运行中的转发 |
-| 转发 | `save_forward(hostId, forward) -> HostView` | 保存前做端口冲突检查 |
+| 转发 | `save_forward(hostId, forward) -> HostView` | 不校验参数、不查端口占用；均留到连接时判断 |
 | | `delete_forward(hostId, forwardId)` | |
 | | `connect_forward(hostId, forwardId)` | 复用父主机参数；先 probe |
 | | `connect_forward_with_password(hostId, forwardId, password)` | |
@@ -134,7 +138,7 @@ components/
 | 指令/终端 | `send_command(hostId, command) -> String` | `ssh … user@host "command"`，返回输出 |
 | | `open_terminal(hostId)` | 起外部 PowerShell 窗口运行交互式 `ssh` |
 | 密钥/探测 | `upload_public_key(hostId, password)` | 主机级；上传前已在前端 probe |
-| | `probe_connection(hostId) -> ready｜password_required｜host_key_changed` | |
+| | `probe_connection(hostId) -> ready｜password_required｜host_key_changed` | 不可达/IP/端口/网络等错误归为带原因的 Err，不当作需要密码 |
 | | `get_host_fingerprint(hostId)` / `remove_known_host(hostId)` | |
 | 设置/日志 | `get_settings` / `save_settings_cmd(settings)` / `list_logs(level)` | 默认主题 light |
 | 系统环境 | `check_ssh -> bool` | 检测 `ssh.exe` 是否可用 |

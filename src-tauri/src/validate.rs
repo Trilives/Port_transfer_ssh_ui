@@ -1,25 +1,7 @@
 use crate::model::{Forward, Host, TunnelMode};
 
-/// 校验主机的 SSH 连接参数。不要求任何转发参数。
-pub fn validate_host(host: &Host) -> Result<(), String> {
-    let mut errors = Vec::new();
-    if host.name.trim().is_empty() {
-        errors.push("Name is required.");
-    }
-    if host.ssh_host.trim().is_empty() {
-        errors.push("SSH host is required.");
-    }
-    if host.ssh_port.parse::<u16>().is_err() {
-        errors.push("SSH port must be a valid port.");
-    }
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors.join("\n"))
-    }
-}
-
-/// 仅校验 SSH 连接可达所需的最小参数（用于探测、上传公钥等）。
+/// 仅校验 SSH 连接可达所需的最小参数（用于探测、上传公钥等运行时操作）。
+/// 新建/编辑主机时不校验，参数是否可用一律留到连接运行时判断。
 pub fn validate_host_connection(host: &Host) -> Result<(), String> {
     let mut errors = Vec::new();
     if host.ssh_host.trim().is_empty() {

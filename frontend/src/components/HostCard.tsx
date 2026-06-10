@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, KeyRound, Pencil, Plus, Server, Terminal, Trash2, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, Pencil, Pin, PinOff, Plus, Server, Terminal, Trash2, Zap } from "lucide-react";
 import { Button } from "./ui/button";
 import { ForwardRow } from "./ForwardRow";
 import { cn } from "../lib/utils";
@@ -16,6 +16,7 @@ export function HostCard(props: {
   onNewForward: () => void;
   onEditHost: () => void;
   onDeleteHost: () => void;
+  onTogglePin: () => void;
   onConnectForward: (forward: Forward) => void;
   onDisconnectForward: (forward: Forward) => void;
   onEditForward: (forward: Forward) => void;
@@ -35,7 +36,15 @@ export function HostCard(props: {
             <Server size={18} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{props.host.name}</div>
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{props.host.name}</span>
+              {props.host.pinned && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Pin size={11} className="fill-current" />
+                  {t(lang, "pinned")}
+                </span>
+              )}
+            </div>
             <div className="truncate text-xs text-slate-500 dark:text-slate-400">{endpoint}</div>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
@@ -47,6 +56,18 @@ export function HostCard(props: {
             <span>{forwards.length} {t(lang, "forwardsCount")}</span>
           </div>
         </button>
+        <Button
+          variant="ghost"
+          onClick={props.onTogglePin}
+          aria-label={t(lang, props.host.pinned ? "unpin" : "pin")}
+          title={t(lang, props.host.pinned ? "unpin" : "pin")}
+        >
+          {props.host.pinned ? (
+            <PinOff size={15} className="text-slate-400" />
+          ) : (
+            <Pin size={15} className="text-blue-600 dark:text-blue-300" />
+          )}
+        </Button>
         <Button variant="danger" onClick={props.onDeleteHost} aria-label={t(lang, "deleteHost")}>
           <Trash2 size={15} />
         </Button>

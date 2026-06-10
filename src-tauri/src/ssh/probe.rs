@@ -7,6 +7,7 @@ use tauri::AppHandle;
 
 use crate::model::Host;
 use crate::ssh::command::build_probe_command;
+use crate::ssh::diagnose::{classify_ssh_failure, format_failure, SshFailureKind};
 use crate::state::AppState;
 use crate::util::{empty_default, no_window};
 
@@ -27,24 +28,13 @@ pub fn probe_connection(host: &Host, state: &AppState, app: &AppHandle) -> Resul
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let lower = stderr.to_lowercase();
-    if lower.contains("remote host identification has changed")
-        || lower.contains("host key verification failed")
-    {
-        return Ok("host_key_changed".to_string());
+    match classify_ssh_failure(&stderr) {
+        SshFailureKind::HostKeyChanged => Ok("host_key_changed".to_string()),
+        // 已连上主机但免密不可用 / 认证失败 → 弹密码框。
+        SshFailureKind::AuthRequired => Ok("password_required".to_string()),
+        // 主机不可达 / IP / 端口 / 网络等问题 → 直接报错并说明原因，不要当成需要密码。
+        other => Err(format_failure(other.reason(state.is_zh()), &stderr)),
     }
-    // 已连上主机但免密认证不可用（BatchMode=yes 下无可用方式、被服务器关闭连接等）→ 需要密码。
-    if lower.contains("permission denied")
-        || lower.contains("publickey")
-        || lower.contains("no supported authentication")
-        || lower.contains("connection closed by")
-        || lower.contains("too many authentication failures")
-        || lower.contains("authentication failed")
-        || lower.contains("keyboard-interactive")
-    {
-        return Ok("password_required".to_string());
-    }
-    Err(format!("Cannot reach host: {}", stderr.trim()))
 }
 
 pub fn get_host_fingerprint(host: &Host) -> Result<String, String> {

@@ -42,3 +42,8 @@ pub fn log_rank(level: &str) -> usize {
 pub fn lock_error<T>(_: std::sync::PoisonError<T>) -> String {
     "Application state lock failed.".to_string()
 }
+
+/// 当前时间的 Unix 毫秒，用作主机最后修改时间。
+pub fn now_millis() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
