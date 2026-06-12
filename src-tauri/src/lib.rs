@@ -8,6 +8,7 @@ mod store;
 mod terminal;
 mod util;
 mod validate;
+mod vscode;
 
 use tauri::Manager;
 
@@ -45,7 +46,11 @@ pub fn run() {
             commands::settings::save_settings_cmd,
             commands::settings::list_logs,
             commands::system::check_ssh,
-            commands::system::install_openssh
+            commands::system::install_openssh,
+            commands::vscode::vscode_status,
+            commands::vscode::vscode_ssh_history,
+            commands::vscode::vscode_open,
+            commands::vscode::vscode_open_home
         ])
         .setup(|app| {
             let state = app.state::<AppState>();

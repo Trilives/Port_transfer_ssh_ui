@@ -1,5 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, Forward, Host, ImportResult, LogEntry } from "./types";
+import type {
+  AppSettings,
+  Forward,
+  Host,
+  ImportResult,
+  LogEntry,
+  VscodeHistoryEntry,
+  VscodeOpenRootResult,
+  VscodeStatus,
+} from "./types";
 
 export const api = {
   // 主机（一级）
@@ -39,6 +48,12 @@ export const api = {
   // 系统环境
   checkSsh: () => invoke<boolean>("check_ssh"),
   installOpenssh: () => invoke<void>("install_openssh"),
+
+  // VS Code Remote-SSH
+  vscodeStatus: () => invoke<VscodeStatus>("vscode_status"),
+  vscodeSshHistory: (hostId: string) => invoke<VscodeHistoryEntry[]>("vscode_ssh_history", { hostId }),
+  vscodeOpen: (uri: string) => invoke<void>("vscode_open", { uri }),
+  vscodeOpenHome: (hostId: string) => invoke<VscodeOpenRootResult>("vscode_open_home", { hostId }),
 
   // 设置 / 日志
   getSettings: () => invoke<AppSettings>("get_settings"),

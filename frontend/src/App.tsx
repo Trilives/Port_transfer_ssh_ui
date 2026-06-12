@@ -18,13 +18,15 @@ import {
   SelectHostsDialog,
   SendCommandDialog,
   SshMissingDialog,
+  VscodeHistoryDialog,
+  VscodeMissingDialog,
 } from "./components/dialogs";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ConfigPage } from "./pages/ConfigPage";
 import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { GuidePage } from "./pages/GuidePage";
-import type { AppSettings, CriticalErrorPayload, Forward, Host, LogEntry, LogLevel } from "./types";
+import type { AppSettings, CriticalErrorPayload, Forward, Host, LogEntry, LogLevel, VscodeHistoryEntry } from "./types";
 
 type Page = "dashboard" | "config" | "logs" | "settings" | "guide";
 
@@ -94,11 +96,14 @@ export function App() {
   } | null>(null);
   const [deleteHostTarget, setDeleteHostTarget] = useState<Host | null>(null);
   const [sshMissing, setSshMissing] = useState(false);
+  // VS Code 打开：历史连接弹窗 + 未安装提示。
+  const [vscodeDialog, setVscodeDialog] = useState<{ host: Host; entries: VscodeHistoryEntry[] } | null>(null);
+  const [vscodeMissing, setVscodeMissing] = useState<"vscode" | "remoteSsh" | null>(null);
   const shownCriticalErrors = useRef(new Set<string>());
 
   const language = settings.language;
   const modalOpen = Boolean(
-    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || selectHosts || importConflict || deleteHostTarget || sshMissing,
+    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || selectHosts || importConflict || deleteHostTarget || sshMissing || vscodeDialog || vscodeMissing,
   );
 
   useEffect(() => {
@@ -508,6 +513,49 @@ export function App() {
     }
   }
 
+  // ---- Open in VS Code (Remote-SSH) ----
+  async function openVscode(host: Host) {
+    setError("");
+    try {
+      const status = await api.vscodeStatus();
+      if (!status.installed) {
+        setVscodeMissing("vscode");
+        return;
+      }
+      if (!status.remoteSsh) {
+        setVscodeMissing("remoteSsh");
+        return;
+      }
+      const entries = await api.vscodeSshHistory(host.id);
+      setVscodeDialog({ host, entries });
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function openVscodeEntry(uri: string) {
+    try {
+      await api.vscodeOpen(uri);
+      setVscodeDialog(null);
+    } catch (err) {
+      setVscodeDialog(null);
+      setError(String(err));
+    }
+  }
+
+  async function openVscodeHome(host: Host) {
+    try {
+      const result = await api.vscodeOpenHome(host.id);
+      setVscodeDialog(null);
+      if (result.addedToConfig) {
+        setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
+      }
+    } catch (err) {
+      setVscodeDialog(null);
+      setError(String(err));
+    }
+  }
+
   async function installSsh() {
     setSshMissing(false);
     try {
@@ -604,6 +652,7 @@ export function App() {
                   setSendCmdPwValue("");
                 }}
                 onOpenTerminal={openTerminal}
+                onOpenVscode={openVscode}
                 onUploadKey={requestKeyUpload}
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
                 onConnectForward={connectForward}
@@ -754,6 +803,19 @@ export function App() {
       )}
       {sshMissing && (
         <SshMissingDialog language={language} onCancel={() => setSshMissing(false)} onInstall={installSsh} />
+      )}
+      {vscodeDialog && (
+        <VscodeHistoryDialog
+          language={language}
+          hostName={vscodeDialog.host.name}
+          entries={vscodeDialog.entries}
+          onOpenEntry={openVscodeEntry}
+          onOpenHome={() => openVscodeHome(vscodeDialog.host)}
+          onCancel={() => setVscodeDialog(null)}
+        />
+      )}
+      {vscodeMissing && (
+        <VscodeMissingDialog language={language} kind={vscodeMissing} onClose={() => setVscodeMissing(null)} />
       )}
     </main>
   );

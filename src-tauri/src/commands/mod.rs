@@ -5,3 +5,4 @@ pub mod keys;
 pub mod settings;
 pub mod system;
 pub mod transfer;
+pub mod vscode;

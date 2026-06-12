@@ -61,6 +61,7 @@ export function ConfigPage(props: {
   onTogglePin: (host: Host) => void;
   onSendCommand: (host: Host) => void;
   onOpenTerminal: (host: Host) => void;
+  onOpenVscode: (host: Host) => void;
   onUploadKey: (host: Host) => void;
   onNewForward: (host: Host) => void;
   onConnectForward: (host: Host, forward: Forward) => void;
@@ -119,6 +120,7 @@ export function ConfigPage(props: {
                 onToggle={() => props.onToggle(host.id)}
                 onSendCommand={() => props.onSendCommand(host)}
                 onOpenTerminal={() => props.onOpenTerminal(host)}
+                onOpenVscode={() => props.onOpenVscode(host)}
                 onUploadKey={() => props.onUploadKey(host)}
                 onNewForward={() => props.onNewForward(host)}
                 onEditHost={() => props.onEditHost(host)}

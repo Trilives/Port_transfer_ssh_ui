@@ -64,3 +64,21 @@ export interface CriticalErrorPayload {
   name: string;
   message: string;
 }
+
+/** VS Code 与 Remote-SSH 扩展的安装情况。 */
+export interface VscodeStatus {
+  installed: boolean;
+  remoteSsh: boolean;
+}
+
+/** 一条 VS Code Remote-SSH 历史远端文件夹。 */
+export interface VscodeHistoryEntry {
+  uri: string;
+  path: string;
+}
+
+/** 直连/打开根目录的结果。 */
+export interface VscodeOpenRootResult {
+  addedToConfig: boolean;
+  alias: string;
+}

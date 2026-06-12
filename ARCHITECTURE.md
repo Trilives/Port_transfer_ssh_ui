@@ -1,7 +1,8 @@
 # SSH Port Forwarder 架构文档
 
 本文档描述 v0.2.0 的整体架构、数据模型、模块划分与关键流程，供开发与维护参考。
-功能与上手见 [README.md](README.md)，开发环境与构建见 [TECHNICAL.md](TECHNICAL.md)。
+功能与上手见 [README.md](README.md)，开发环境与构建见 [TECHNICAL.md](TECHNICAL.md)，
+何时/如何拆分模块见 [MODULARITY.md](MODULARITY.md)。
 
 ## 1. 概览
 
@@ -83,7 +84,8 @@ model.rs           Host / Forward / 枚举 / AppSettings / LogEntry / View / Def
 store.rs           read_json / write_json、数据目录路径、AppState 持久化与日志写盘
 validate.rs        validate_host / validate_forward
 portcheck.rs       本机端口占用检测 + 占用进程名/PID（netstat + tasklist）
-sshconfig.rs       解析/写入 ~/.ssh/config（导入主机、导出到托管区块）
+sshconfig.rs       解析/写入 ~/.ssh/config（导入主机、导出到托管区块、按 IP 查别名/追加条目）
+vscode.rs          VS Code Remote-SSH：检测安装、读 storage.json 历史连接、按 IP 匹配、打开 folder-uri
 ssh/
   mod.rs           子模块再导出
   command.rs       build_ssh / build_probe / build_key_upload / build_send 命令构造
@@ -100,6 +102,7 @@ commands/
   keys.rs          upload_public_key / probe_connection / get_host_fingerprint / remove_known_host
   settings.rs      get_settings / save_settings_cmd / list_logs
   transfer.rs      导入/导出主机（文件 + ~/.ssh/config）；rfd 原生文件对话框
+  vscode.rs        vscode_status / vscode_ssh_history / vscode_open / vscode_open_home
 ```
 
 ### 前端 `frontend/src/`
@@ -114,11 +117,11 @@ pages/
   SettingsPage.tsx   主题/语言/日志等级；选项随语言切换，默认 light
   GuidePage.tsx      使用说明；暗色适配；含密钥字段说明
 components/
-  HostCard.tsx       一级：点击展开/收起，状态，按钮[发送指令|打开终端|上传密钥|新建端口转发]
+  HostCard.tsx       一级：点击展开/收起，状态，按钮[发送指令|打开终端▾(含 VS Code 打开)|上传密钥|新建端口转发]
   ForwardRow.tsx     二级：状态 + [连接|断开|编辑|删除]
   StatusBadge.tsx    运行/停止状态徽标
   LogTable.tsx       日志表
-  dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/ConnectionError/CriticalError/SelectHosts/ImportConflict 弹窗
+  dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/ConnectionError/CriticalError/SelectHosts/ImportConflict/VscodeHistory/VscodeMissing 弹窗
   ui/ button card input select
 ```
 
@@ -150,6 +153,10 @@ components/
 | 设置/日志 | `get_settings` / `save_settings_cmd(settings)` / `list_logs(level)` | 默认主题 light |
 | 系统环境 | `check_ssh -> bool` | 检测 `ssh.exe` 是否可用 |
 | | `install_openssh()` | 提权 PowerShell 运行 `Add-WindowsCapability` 安装 OpenSSH 客户端 |
+| VS Code | `vscode_status -> {installed, remoteSsh}` | 检测 Code.exe 与 Remote-SSH 扩展 |
+| | `vscode_ssh_history(hostId) -> [{uri, path}]` | 按主机 IP 匹配 storage.json 里的远端历史文件夹 |
+| | `vscode_open(uri)` | `code --folder-uri <uri>` 重开历史文件夹 |
+| | `vscode_open_home(hostId) -> {addedToConfig, alias}` | 直连/家目录：必要时写入 ~/.ssh/config，探测 `$HOME` 并用别名打开它 |
 
 事件：
 
@@ -195,6 +202,20 @@ remote 模式监听在远端，本机不检查。
 
 `open_terminal` 起一个可见的 PowerShell 窗口运行 `ssh [opts] user@host`，提供完整交互式会话
 （Tab 补全由远端 shell 完成）。该窗口独立于应用，不随应用退出而被清理。
+
+### 通过 VS Code 打开（Remote-SSH）
+
+「打开终端」按钮右侧下拉提供「通过 VS Code 打开」。流程：
+
+1. `vscode_status`：找不到 Code.exe → 提示未安装；找到但无 Remote-SSH 扩展 → 提示装扩展。
+2. `vscode_ssh_history(hostId)`：读 `%APPDATA%\Code\User\globalStorage\storage.json` 的
+   `profileAssociations.workspaces`，key 为 `vscode-remote://ssh-remote+<authority>/<path>`。
+   authority 为裸 IP，或 hex 的 `{"hostName":"别名"}`；别名经 `~/.ssh/config` 的 `HostName`
+   解析回 IP，与主机 IP 比对，列出命中的远端文件夹。
+3. 弹窗第一项「直连·打开家目录」→ `vscode_open_home`：在 config 找该 IP 的别名，没有就以主机名
+   （冲突时退回 IP）追加一条 `Host` 写入 config 并提示；再用一次性免密 SSH 探测远端 `$HOME`，
+   `code --folder-uri ssh-remote+<别名><home>` 打开家目录（探测不到则打开不带文件夹的已连接窗口）。
+   其余项 → `vscode_open` 原样重开该历史 URI。无历史时仅显示「直连」项并提示将打开家目录。
 
 ## 6. 数据存储
 

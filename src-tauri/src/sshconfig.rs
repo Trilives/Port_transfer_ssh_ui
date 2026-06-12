@@ -84,6 +84,43 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
     hosts
 }
 
+/// 在 config 中找到 `HostName` 等于该 IP 的第一个别名（用于 VS Code 按 IP 复用已有条目）。
+pub fn find_alias_for_ip(content: &str, ip: &str) -> Option<String> {
+    let ip = ip.trim();
+    parse_ssh_config(content)
+        .into_iter()
+        .find(|host| host.ssh_host.trim() == ip && !host.name.trim().is_empty())
+        .map(|host| host.name)
+}
+
+/// 在 config 末尾追加一个主机条目（仅写非空、ssh 可解析的字段），返回新的完整文本。
+/// 不触碰已有内容，与托管区块互不影响。
+pub fn append_host_stanza(content: &str, alias: &str, host: &Host) -> String {
+    let mut out = content.to_string();
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push('\n');
+    out.push_str("# added by ssh-port-forwarder\n");
+    out.push_str(&format!("Host {alias}\n"));
+    if !host.ssh_host.trim().is_empty() {
+        out.push_str(&format!("    HostName {}\n", host.ssh_host.trim()));
+    }
+    if !host.ssh_user.trim().is_empty() {
+        out.push_str(&format!("    User {}\n", host.ssh_user.trim()));
+    }
+    if !host.ssh_port.trim().is_empty() && host.ssh_port.trim() != "22" {
+        out.push_str(&format!("    Port {}\n", host.ssh_port.trim()));
+    }
+    if !host.identity_file.trim().is_empty() {
+        out.push_str(&format!("    IdentityFile {}\n", host.identity_file.trim()));
+    }
+    if !host.proxy_jump.trim().is_empty() {
+        out.push_str(&format!("    ProxyJump {}\n", host.proxy_jump.trim()));
+    }
+    out
+}
+
 /// `Key value` 或 `Key=value`，返回去引号的值。
 fn split_key_value(line: &str) -> (String, String) {
     let (key, rest) = match line.find(|c: char| c.is_whitespace() || c == '=') {

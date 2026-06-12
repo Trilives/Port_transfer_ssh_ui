@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { X } from "lucide-react";
+import { FolderOpen, Plug, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -479,6 +479,76 @@ export function ConnectionErrorDialog(props: {
           {props.message}
         </pre>
         <div className="mt-4 flex justify-end">
+          <Button onClick={props.onClose}>{t(lang, "close")}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export function VscodeHistoryDialog(props: {
+  language: Language;
+  hostName: string;
+  entries: { uri: string; path: string }[];
+  onOpenEntry: (uri: string) => void;
+  onOpenHome: () => void;
+  onCancel: () => void;
+}) {
+  const lang = props.language;
+  const empty = props.entries.length === 0;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-lg border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
+        <DialogHeader title={`${t(lang, "vscodeHistoryTitle")} — ${props.hostName}`} description={t(lang, "vscodeHistoryDesc")} onClose={props.onCancel} />
+        {empty && (
+          <p className="mb-3 rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm leading-6 text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            {t(lang, "vscodeNoHistory")}
+          </p>
+        )}
+        <div className="grid max-h-80 gap-1 overflow-auto">
+          <button
+            onClick={props.onOpenHome}
+            className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
+          >
+            <Plug size={16} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{t(lang, "vscodeDirectHome")}</span>
+          </button>
+          {props.entries.map((entry) => (
+            <button
+              key={entry.uri}
+              onClick={() => props.onOpenEntry(entry.uri)}
+              title={entry.path}
+              className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              <FolderOpen size={16} className="shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1 truncate">{entry.path}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 flex justify-end">
+          <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export function VscodeMissingDialog(props: {
+  language: Language;
+  kind: "vscode" | "remoteSsh";
+  onClose: () => void;
+}) {
+  const lang = props.language;
+  const title = props.kind === "vscode" ? t(lang, "vscodeMissingTitle") : t(lang, "vscodeRemoteSshMissingTitle");
+  const desc = props.kind === "vscode" ? t(lang, "vscodeMissingDesc") : t(lang, "vscodeRemoteSshMissingDesc");
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-amber-300 bg-white dark:border-amber-800 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>⚠️ {title}</CardTitle>
+          <CardDescription>{desc}</CardDescription>
+        </CardHeader>
+        <div className="mt-2 flex justify-end">
           <Button onClick={props.onClose}>{t(lang, "close")}</Button>
         </div>
       </Card>
