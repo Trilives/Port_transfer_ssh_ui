@@ -17,6 +17,7 @@
 - 每条转发独立连接、断开，可整机断开和全部断开，支持保持连接自动重连。
 - **发送指令**：通过 SSH 在主机上执行一条指令，输出显示在弹窗中；支持免密或一次性密码两种方式。
 - **打开终端**：弹出一个已通过 SSH 连上服务器的外部 PowerShell 窗口，支持 Tab 自动补全。
+- **通过 VS Code 打开**：「打开终端」按钮右侧下拉新增「通过 VS Code 打开」。读取 VS Code Remote-SSH 的历史连接，按主机 IP 列出该主机下打开过的远端文件夹，点击即用 Remote-SSH 直接打开；首项「直连·打开家目录」会在 `~/.ssh/config` 中按需补一条别名后打开远端家目录。自动探测 VS Code 安装位置（含注册表，支持非标准盘符）；未安装 VS Code 或 Remote-SSH 扩展时弹窗提示。
 - **上传密钥**：把本机公钥写入远端 `authorized_keys` 配置免密登录（上传前先检测是否已可免密直连）。
 - **跳板机（ProxyJump）**：新建主机可填跳板机字段，经由另一台主机跳转连接（可不填）。
 - **导入 / 导出主机**：从导出文件或本机 `~/.ssh/config` 导入；导出到文件（含转发与端口，可再次导入）或写入 `~/.ssh/config`（仅 ssh 可解析的部分）。按主机 IP 去重，重复时可选「全部覆盖」或「仅导入不重复的」。
@@ -35,9 +36,9 @@
 
 ## 下载与运行
 
-从 GitHub Releases 下载 `v0.2.3`：
+从 GitHub Releases 下载 `v0.2.4`：
 
-- 推荐下载安装包：`SSH Port Forwarder_0.2.3_x64-setup.exe`
+- 推荐下载安装包：`SSH Port Forwarder_0.2.4_x64-setup.exe`
 - 也可以直接运行免安装程序：`ssh-port-forwarder.exe`
 
 运行前请确认 Windows 已安装 OpenSSH Client，并且 PowerShell 中可以执行：

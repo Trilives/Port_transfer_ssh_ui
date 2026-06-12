@@ -17,6 +17,7 @@ A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: e
 - Each forward connects/disconnects independently; you can disconnect a whole host or everything, with keep-alive auto-reconnect.
 - **Send command**: run a single command on the host over SSH, with output shown in a dialog; works passwordless or with a one-time password.
 - **Open terminal**: launches an external PowerShell window already connected to the server over SSH, with Tab completion.
+- **Open in VS Code**: a dropdown next to "Open terminal" adds "Open in VS Code". It reads VS Code's Remote-SSH history and lists the remote folders previously opened for this host (matched by IP); click one to open it over Remote-SSH. The first item, "Direct · open home directory", adds an alias to `~/.ssh/config` if needed and opens the remote home. VS Code's install location is detected automatically (including via the registry, so non-standard drives work); a dialog warns if VS Code or the Remote-SSH extension is missing.
 - **Upload key**: writes your local public key into the remote `authorized_keys` for passwordless login (it first checks whether passwordless access already works).
 - **Jump host (ProxyJump)**: a host can specify a jump host to connect through another machine (optional).
 - **Import / export hosts**: import from an exported file or your local `~/.ssh/config`; export to a file (with forwards and ports, re-importable) or write into `~/.ssh/config` (only the ssh-resolvable parts). Deduplicated by host IP — on conflict, choose "Overwrite all" or "Import non-duplicates only".
@@ -35,9 +36,9 @@ A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: e
 
 ## Download & Run
 
-Download `v0.2.3` from GitHub Releases:
+Download `v0.2.4` from GitHub Releases:
 
-- Recommended installer: `SSH Port Forwarder_0.2.3_x64-setup.exe`
+- Recommended installer: `SSH Port Forwarder_0.2.4_x64-setup.exe`
 - Or run the portable build directly: `ssh-port-forwarder.exe`
 
 Before running, make sure the Windows OpenSSH Client is installed and that PowerShell can run:
