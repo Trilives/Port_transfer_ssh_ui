@@ -1,4 +1,4 @@
-import { Pencil, Plug, PlugZap, Trash2 } from "lucide-react";
+import { Globe, Pencil, Plug, PlugZap, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { StatusBadge } from "./StatusBadge";
 import { t } from "../i18n";
@@ -9,6 +9,7 @@ export function ForwardRow(props: {
   forward: Forward;
   onConnect: () => void;
   onDisconnect: () => void;
+  onOpenWeb: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -26,6 +27,11 @@ export function ForwardRow(props: {
       </div>
       <StatusBadge language={lang} status={props.forward.status} />
       <div className="flex flex-wrap gap-2">
+        {running && (
+          <Button variant="ghost" onClick={props.onOpenWeb} aria-label={t(lang, "openWeb")} title={t(lang, "openWeb")}>
+            <Globe size={15} />
+          </Button>
+        )}
         {running ? (
           <Button variant="ghost" onClick={props.onDisconnect}>
             <PlugZap size={15} />

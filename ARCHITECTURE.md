@@ -98,7 +98,7 @@ commands/
   mod.rs
   hosts.rs         list_hosts / save_host / delete_host
   forwards.rs      save_forward / delete_forward / connect_* / disconnect_*
-  exec.rs          send_command / open_terminal
+  exec.rs          send_command / open_terminal / open_url（默认浏览器打开 http/https）
   keys.rs          upload_public_key / probe_connection / get_host_fingerprint / remove_known_host
   settings.rs      get_settings / save_settings_cmd / list_logs
   transfer.rs      导入/导出主机（文件 + ~/.ssh/config）；rfd 原生文件对话框
@@ -118,7 +118,7 @@ pages/
   GuidePage.tsx      使用说明；暗色适配；含密钥字段说明
 components/
   HostCard.tsx       一级：点击展开/收起，状态，按钮[发送指令|打开终端▾(含 VS Code 打开)|上传密钥|新建端口转发]
-  ForwardRow.tsx     二级：状态 + [连接|断开|编辑|删除]
+  ForwardRow.tsx     二级：状态 + [网页打开(运行中)|连接|断开|编辑|删除]
   StatusBadge.tsx    运行/停止状态徽标
   LogTable.tsx       日志表
   dialogs.tsx        Host/Forward/SendCommand/Password/KeyUpload/HostKeyChanged/ConnectionError/CriticalError/SelectHosts/ImportConflict/VscodeHistory/VscodeMissing 弹窗
@@ -147,6 +147,7 @@ components/
 | | `disconnect_forward(hostId, forwardId)` / `disconnect_host(hostId)` / `disconnect_all()` | |
 | 指令/终端 | `send_command(hostId, command) -> String` | `ssh … user@host "command"`，返回输出 |
 | | `open_terminal(hostId)` | 起外部 PowerShell 窗口运行交互式 `ssh` |
+| | `open_url(url)` | 用系统默认浏览器打开 http/https 链接（端口转发「网页打开」用，rundll32 FileProtocolHandler）|
 | 密钥/探测 | `upload_public_key(hostId, password)` | 主机级；上传前已在前端 probe |
 | | `probe_connection(hostId) -> ready｜password_required｜host_key_changed` | 不可达/IP/端口/网络等错误归为带原因的 Err，不当作需要密码 |
 | | `get_host_fingerprint(hostId)` / `remove_known_host(hostId)` | |

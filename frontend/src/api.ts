@@ -40,6 +40,7 @@ export const api = {
   sendCommandWithPassword: (hostId: string, command: string, password: string) =>
     invoke<string>("send_command_with_password", { hostId, command, password }),
   openTerminal: (hostId: string) => invoke<void>("open_terminal", { hostId }),
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
   uploadPublicKey: (hostId: string, password: string) => invoke<Host>("upload_public_key", { hostId, password }),
   probeConnection: (hostId: string) => invoke<string>("probe_connection", { hostId }),
   getHostFingerprint: (hostId: string) => invoke<string>("get_host_fingerprint", { hostId }),

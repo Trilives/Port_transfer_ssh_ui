@@ -1,4 +1,4 @@
-import { Activity, CircleSlash, Plus, PlugZap, Server } from "lucide-react";
+import { Activity, CircleSlash, Globe, Plus, PlugZap, Server } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { cn } from "../lib/utils";
@@ -19,6 +19,7 @@ export function DashboardPage(props: {
   onNew: () => void;
   onStopAll: () => void;
   onDisconnectForward: (host: Host, forward: Forward) => void;
+  onOpenForwardWeb: (host: Host, forward: Forward) => void;
 }) {
   const lang = props.language;
   const groups = props.hosts
@@ -76,6 +77,9 @@ export function DashboardPage(props: {
                       <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                         {t(lang, "running")}
                       </span>
+                      <Button variant="ghost" onClick={() => props.onOpenForwardWeb(host, forward)} aria-label={t(lang, "openWeb")} title={t(lang, "openWeb")}>
+                        <Globe size={15} />
+                      </Button>
                       <Button variant="ghost" onClick={() => props.onDisconnectForward(host, forward)}>
                         <PlugZap size={15} />
                         {t(lang, "disconnect")}

@@ -67,6 +67,7 @@ export function HostCard(props: {
   onTogglePin: () => void;
   onConnectForward: (forward: Forward) => void;
   onDisconnectForward: (forward: Forward) => void;
+  onOpenForwardWeb: (forward: Forward) => void;
   onEditForward: (forward: Forward) => void;
   onDeleteForward: (forward: Forward) => void;
 }) {
@@ -156,6 +157,7 @@ export function HostCard(props: {
                   forward={forward}
                   onConnect={() => props.onConnectForward(forward)}
                   onDisconnect={() => props.onDisconnectForward(forward)}
+                  onOpenWeb={() => props.onOpenForwardWeb(forward)}
                   onEdit={() => props.onEditForward(forward)}
                   onDelete={() => props.onDeleteForward(forward)}
                 />

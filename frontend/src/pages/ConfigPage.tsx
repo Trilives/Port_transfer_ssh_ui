@@ -66,6 +66,7 @@ export function ConfigPage(props: {
   onNewForward: (host: Host) => void;
   onConnectForward: (host: Host, forward: Forward) => void;
   onDisconnectForward: (host: Host, forward: Forward) => void;
+  onOpenForwardWeb: (host: Host, forward: Forward) => void;
   onEditForward: (host: Host, forward: Forward) => void;
   onDeleteForward: (host: Host, forward: Forward) => void;
   onImportFromFile: () => void;
@@ -128,6 +129,7 @@ export function ConfigPage(props: {
                 onTogglePin={() => props.onTogglePin(host)}
                 onConnectForward={(forward) => props.onConnectForward(host, forward)}
                 onDisconnectForward={(forward) => props.onDisconnectForward(host, forward)}
+                onOpenForwardWeb={(forward) => props.onOpenForwardWeb(host, forward)}
                 onEditForward={(forward) => props.onEditForward(host, forward)}
                 onDeleteForward={(forward) => props.onDeleteForward(host, forward)}
               />

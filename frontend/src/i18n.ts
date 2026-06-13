@@ -88,6 +88,7 @@ const text = {
     // 转发行
     connect: "连接",
     disconnect: "断开",
+    openWeb: "在浏览器打开",
     edit: "编辑",
     delete: "删除",
     mode: "模式",
@@ -272,6 +273,7 @@ const text = {
 
     connect: "Connect",
     disconnect: "Disconnect",
+    openWeb: "Open in browser",
     edit: "Edit",
     delete: "Delete",
     mode: "Mode",

@@ -38,6 +38,7 @@ pub fn run() {
             commands::exec::send_command,
             commands::exec::send_command_with_password,
             commands::exec::open_terminal,
+            commands::exec::open_url,
             commands::keys::upload_public_key,
             commands::keys::probe_connection,
             commands::keys::get_host_fingerprint,

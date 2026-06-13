@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Activity, BookOpen, ScrollText, Server, Settings as SettingsIcon, Terminal } from "lucide-react";
 import { api } from "./api";
-import { cn } from "./lib/utils";
+import { cn, forwardWebUrl } from "./lib/utils";
 import { t } from "./i18n";
 import {
   ConfirmDialog,
@@ -513,6 +513,14 @@ export function App() {
     }
   }
 
+  async function openForwardWeb(forward: Forward) {
+    try {
+      await api.openUrl(forwardWebUrl(forward));
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   // ---- Open in VS Code (Remote-SSH) ----
   async function openVscode(host: Host) {
     setError("");
@@ -646,6 +654,7 @@ export function App() {
                   await refreshHosts();
                 }}
                 onDisconnectForward={disconnectForward}
+                onOpenForwardWeb={(_host, forward) => openForwardWeb(forward)}
               />
             )}
             {page === "config" && (
@@ -671,6 +680,7 @@ export function App() {
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
                 onConnectForward={connectForward}
                 onDisconnectForward={disconnectForward}
+                onOpenForwardWeb={(_host, forward) => openForwardWeb(forward)}
                 onEditForward={(host, forward) => setForwardDialog({ hostId: host.id, draft: forward })}
                 onDeleteForward={deleteForward}
                 onImportFromFile={importFromFile}

@@ -94,3 +94,19 @@ pub fn open_terminal(host_id: String, state: State<AppState>, app: AppHandle) ->
     state.add_log("info", format!("[{}] opened terminal", host.name), Some(&app));
     Ok(())
 }
+
+/// 用系统默认浏览器打开一个 http/https 链接（端口转发的“网页打开”用）。
+#[tauri::command]
+pub fn open_url(url: String, state: State<AppState>, app: AppHandle) -> Result<(), String> {
+    let url = url.trim();
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Only http/https URLs are allowed.".to_string());
+    }
+    // rundll32 的 FileProtocolHandler 会按系统默认关联打开浏览器，不弹控制台窗口。
+    let mut command = Command::new("rundll32");
+    command.args(["url.dll,FileProtocolHandler", url]);
+    no_window(&mut command);
+    command.spawn().map_err(|err| err.to_string())?;
+    state.add_log("info", format!("open url {url}"), Some(&app));
+    Ok(())
+}
