@@ -113,18 +113,52 @@ pub fn open_folder_uri(uri: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 直连/打开家目录：找到（或写入）该 IP 对应的 ssh config 别名，探测远端 `$HOME` 并用别名打开它；
-/// 探测不到（需密码/不可达）时回退到打开一个已连接但不带文件夹的远端窗口（仍落在家目录）。
-pub fn open_home_for_host(host: &Host) -> Result<VscodeOpenRootResult, String> {
+/// 直连：找到（或写入）该 IP 对应的 ssh config 别名，用 VS Code 默认方式打开一个已连接但不带
+/// 文件夹的远端窗口（`code --remote ssh-remote+<别名>`，不带任何历史路径）。
+pub fn open_direct_for_host(host: &Host) -> Result<VscodeOpenRootResult, String> {
+    let (alias, added_to_config) = ensure_alias(host)?;
+    open_remote_window(&alias)?;
+    Ok(VscodeOpenRootResult { added_to_config, alias })
+}
+
+/// 打开指定的远端目录。绝对路径（以 `/` 开头）原样打开；`~` 或相对路径相对家目录解析。
+pub fn open_path_for_host(host: &Host, path: &str) -> Result<VscodeOpenRootResult, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return open_direct_for_host(host);
+    }
+    let (alias, added_to_config) = ensure_alias(host)?;
+
+    let absolute = if path.starts_with('/') {
+        path.to_string()
+    } else {
+        // ~ 或相对路径：相对远端家目录解析。
+        let rel = path.strip_prefix('~').unwrap_or(path).trim_start_matches('/');
+        let home = query_remote_home(host)
+            .ok_or_else(|| "Cannot resolve the remote home directory. Use an absolute path that starts with /.".to_string())?;
+        if rel.is_empty() {
+            home
+        } else {
+            format!("{}/{}", home.trim_end_matches('/'), rel)
+        }
+    };
+
+    let uri = format!("vscode-remote://ssh-remote+{}{}", alias, encode_path(&absolute));
+    open_folder_uri(&uri)?;
+    Ok(VscodeOpenRootResult { added_to_config, alias })
+}
+
+/// 找到该主机 IP 对应的 ssh config 别名；没有则以主机名（冲突退回 IP）追加写入 config。
+/// 返回 (别名, 本次是否新写入)。
+fn ensure_alias(host: &Host) -> Result<(String, bool), String> {
     let ip = host.ssh_host.trim();
     if ip.is_empty() {
         return Err("Host has no SSH host/IP.".to_string());
     }
     let config_path = ssh_config_path()?;
     let content = fs::read_to_string(&config_path).unwrap_or_default();
-
-    let (alias, added_to_config) = match find_alias_for_ip(&content, ip) {
-        Some(alias) => (alias, false),
+    match find_alias_for_ip(&content, ip) {
+        Some(alias) => Ok((alias, false)),
         None => {
             let alias = pick_alias(&content, host, ip);
             let updated = append_host_stanza(&content, &alias, host);
@@ -132,18 +166,9 @@ pub fn open_home_for_host(host: &Host) -> Result<VscodeOpenRootResult, String> {
                 let _ = fs::create_dir_all(parent);
             }
             fs::write(&config_path, updated).map_err(|err| err.to_string())?;
-            (alias, true)
+            Ok((alias, true))
         }
-    };
-
-    match query_remote_home(host) {
-        Some(home) => {
-            let uri = format!("vscode-remote://ssh-remote+{}{}", alias, encode_path(&home));
-            open_folder_uri(&uri)?;
-        }
-        None => open_remote_window(&alias)?,
     }
-    Ok(VscodeOpenRootResult { added_to_config, alias })
 }
 
 /// 用一次性 SSH（免密、8s 超时、不弹密码）探测远端 `$HOME`；失败/非绝对路径时返回 None。

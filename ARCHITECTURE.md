@@ -102,7 +102,7 @@ commands/
   keys.rs          upload_public_key / probe_connection / get_host_fingerprint / remove_known_host
   settings.rs      get_settings / save_settings_cmd / list_logs
   transfer.rs      导入/导出主机（文件 + ~/.ssh/config）；rfd 原生文件对话框
-  vscode.rs        vscode_status / vscode_ssh_history / vscode_open / vscode_open_home
+  vscode.rs        vscode_status / vscode_ssh_history / vscode_open / vscode_open_direct / vscode_open_path
 ```
 
 ### 前端 `frontend/src/`
@@ -156,7 +156,8 @@ components/
 | VS Code | `vscode_status -> {installed, remoteSsh}` | 检测 Code.exe 与 Remote-SSH 扩展 |
 | | `vscode_ssh_history(hostId) -> [{uri, path}]` | 按主机 IP 匹配 storage.json 里的远端历史文件夹 |
 | | `vscode_open(uri)` | `code --folder-uri <uri>` 重开历史文件夹 |
-| | `vscode_open_home(hostId) -> {addedToConfig, alias}` | 直连/家目录：必要时写入 ~/.ssh/config，探测 `$HOME` 并用别名打开它 |
+| | `vscode_open_direct(hostId) -> {addedToConfig, alias}` | 直连：必要时写入 ~/.ssh/config，`code --remote ssh-remote+<别名>` 打开不带文件夹的已连接窗口 |
+| | `vscode_open_path(hostId, path) -> {addedToConfig, alias}` | 打开指定远端目录；绝对路径原样，`~`/相对路径探测 `$HOME` 后解析 |
 
 事件：
 
@@ -212,10 +213,11 @@ remote 模式监听在远端，本机不检查。
    `profileAssociations.workspaces`，key 为 `vscode-remote://ssh-remote+<authority>/<path>`。
    authority 为裸 IP，或 hex 的 `{"hostName":"别名"}`；别名经 `~/.ssh/config` 的 `HostName`
    解析回 IP，与主机 IP 比对，列出命中的远端文件夹。
-3. 弹窗第一项「直连·打开家目录」→ `vscode_open_home`：在 config 找该 IP 的别名，没有就以主机名
-   （冲突时退回 IP）追加一条 `Host` 写入 config 并提示；再用一次性免密 SSH 探测远端 `$HOME`，
-   `code --folder-uri ssh-remote+<别名><home>` 打开家目录（探测不到则打开不带文件夹的已连接窗口）。
-   其余项 → `vscode_open` 原样重开该历史 URI。无历史时仅显示「直连」项并提示将打开家目录。
+3. 弹窗第一项「直连」→ `vscode_open_direct`：在 config 找该 IP 的别名，没有就以主机名（冲突时退回
+   IP）追加一条 `Host` 写入 config 并提示；再 `code --remote ssh-remote+<别名>` 用 VS Code 默认方式
+   打开不带文件夹的已连接窗口。历史项 → `vscode_open` 原样重开该历史 URI。弹窗底部「指定目录打开」
+   → `vscode_open_path`：绝对路径原样打开，`~`/相对路径用一次性免密 SSH 探测 `$HOME` 后解析。
+   无历史时仅显示「直连」与「指定目录」。
 
 ## 6. 数据存储
 

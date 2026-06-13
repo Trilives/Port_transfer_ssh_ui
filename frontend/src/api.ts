@@ -53,7 +53,8 @@ export const api = {
   vscodeStatus: () => invoke<VscodeStatus>("vscode_status"),
   vscodeSshHistory: (hostId: string) => invoke<VscodeHistoryEntry[]>("vscode_ssh_history", { hostId }),
   vscodeOpen: (uri: string) => invoke<void>("vscode_open", { uri }),
-  vscodeOpenHome: (hostId: string) => invoke<VscodeOpenRootResult>("vscode_open_home", { hostId }),
+  vscodeOpenDirect: (hostId: string) => invoke<VscodeOpenRootResult>("vscode_open_direct", { hostId }),
+  vscodeOpenPath: (hostId: string, path: string) => invoke<VscodeOpenRootResult>("vscode_open_path", { hostId, path }),
 
   // 设置 / 日志
   getSettings: () => invoke<AppSettings>("get_settings"),

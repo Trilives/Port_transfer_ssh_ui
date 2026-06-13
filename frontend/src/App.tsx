@@ -543,9 +543,23 @@ export function App() {
     }
   }
 
-  async function openVscodeHome(host: Host) {
+  async function openVscodeDirect(host: Host) {
     try {
-      const result = await api.vscodeOpenHome(host.id);
+      const result = await api.vscodeOpenDirect(host.id);
+      setVscodeDialog(null);
+      if (result.addedToConfig) {
+        setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
+      }
+    } catch (err) {
+      setVscodeDialog(null);
+      setError(String(err));
+    }
+  }
+
+  async function openVscodePath(host: Host, path: string) {
+    if (!path.trim()) return;
+    try {
+      const result = await api.vscodeOpenPath(host.id, path.trim());
       setVscodeDialog(null);
       if (result.addedToConfig) {
         setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
@@ -810,7 +824,8 @@ export function App() {
           hostName={vscodeDialog.host.name}
           entries={vscodeDialog.entries}
           onOpenEntry={openVscodeEntry}
-          onOpenHome={() => openVscodeHome(vscodeDialog.host)}
+          onOpenDirect={() => openVscodeDirect(vscodeDialog.host)}
+          onOpenPath={(path) => openVscodePath(vscodeDialog.host, path)}
           onCancel={() => setVscodeDialog(null)}
         />
       )}

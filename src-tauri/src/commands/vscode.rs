@@ -27,20 +27,44 @@ pub fn vscode_open(uri: String, state: State<AppState>, app: AppHandle) -> Resul
     Ok(())
 }
 
-/// 直连/打开远端家目录：必要时把主机写入 ~/.ssh/config，探测 $HOME 并用别名打开它。
+/// 直连：必要时把主机写入 ~/.ssh/config，用 VS Code 默认方式打开不带文件夹的已连接远端窗口。
 #[tauri::command]
-pub fn vscode_open_home(
+pub fn vscode_open_direct(
     host_id: String,
     state: State<AppState>,
     app: AppHandle,
 ) -> Result<vscode::VscodeOpenRootResult, String> {
     let host = state.find_host(&host_id)?;
-    let result = vscode::open_home_for_host(&host)?;
+    let result = vscode::open_direct_for_host(&host)?;
     state.add_log(
         "info",
         format!(
-            "[{}] vscode open home (alias {}, addedToConfig={})",
+            "[{}] vscode direct connect (alias {}, addedToConfig={})",
             host.name, result.alias, result.added_to_config
+        ),
+        Some(&app),
+    );
+    Ok(result)
+}
+
+/// 用 VS Code 打开指定的远端目录（绝对路径原样；~/相对路径相对家目录解析）。
+#[tauri::command]
+pub fn vscode_open_path(
+    host_id: String,
+    path: String,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<vscode::VscodeOpenRootResult, String> {
+    let host = state.find_host(&host_id)?;
+    let result = vscode::open_path_for_host(&host, &path)?;
+    state.add_log(
+        "info",
+        format!(
+            "[{}] vscode open path {} (alias {}, addedToConfig={})",
+            host.name,
+            path.trim(),
+            result.alias,
+            result.added_to_config
         ),
         Some(&app),
     );

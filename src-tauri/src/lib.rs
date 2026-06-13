@@ -50,7 +50,8 @@ pub fn run() {
             commands::vscode::vscode_status,
             commands::vscode::vscode_ssh_history,
             commands::vscode::vscode_open,
-            commands::vscode::vscode_open_home
+            commands::vscode::vscode_open_direct,
+            commands::vscode::vscode_open_path
         ])
         .setup(|app| {
             let state = app.state::<AppState>();

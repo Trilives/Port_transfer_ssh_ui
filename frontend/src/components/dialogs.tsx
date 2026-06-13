@@ -1,5 +1,5 @@
-import { type ReactNode } from "react";
-import { FolderOpen, Plug, X } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { FolderOpen, FolderSearch, Plug, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -491,11 +491,13 @@ export function VscodeHistoryDialog(props: {
   hostName: string;
   entries: { uri: string; path: string }[];
   onOpenEntry: (uri: string) => void;
-  onOpenHome: () => void;
+  onOpenDirect: () => void;
+  onOpenPath: (path: string) => void;
   onCancel: () => void;
 }) {
   const lang = props.language;
   const empty = props.entries.length === 0;
+  const [customPath, setCustomPath] = useState("");
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
       <Card className="w-full max-w-lg border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
@@ -507,11 +509,11 @@ export function VscodeHistoryDialog(props: {
         )}
         <div className="grid max-h-80 gap-1 overflow-auto">
           <button
-            onClick={props.onOpenHome}
+            onClick={props.onOpenDirect}
             className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
           >
             <Plug size={16} className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{t(lang, "vscodeDirectHome")}</span>
+            <span className="min-w-0 flex-1 truncate">{t(lang, "vscodeDirect")}</span>
           </button>
           {props.entries.map((entry) => (
             <button
@@ -524,6 +526,23 @@ export function VscodeHistoryDialog(props: {
               <span className="min-w-0 flex-1 truncate">{entry.path}</span>
             </button>
           ))}
+        </div>
+        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+          <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">{t(lang, "vscodeOpenPathLabel")}</label>
+          <div className="flex gap-2">
+            <Input
+              value={customPath}
+              placeholder={t(lang, "vscodeOpenPathPlaceholder")}
+              onChange={(e) => setCustomPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && customPath.trim()) props.onOpenPath(customPath.trim());
+              }}
+            />
+            <Button onClick={() => props.onOpenPath(customPath.trim())} disabled={!customPath.trim()}>
+              <FolderSearch size={16} />
+              {t(lang, "vscodeOpenPathButton")}
+            </Button>
+          </div>
         </div>
         <div className="mt-5 flex justify-end">
           <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>

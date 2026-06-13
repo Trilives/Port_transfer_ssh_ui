@@ -68,9 +68,12 @@ const text = {
 
     // 通过 VS Code 打开
     vscodeHistoryTitle: "通过 VS Code 打开",
-    vscodeHistoryDesc: "选择一个历史远端文件夹，或「直连」打开远端家目录。",
-    vscodeDirectHome: "直连 · 打开家目录",
-    vscodeNoHistory: "未找到该主机的 VS Code 历史连接。点击下方「直连」将打开远端家目录，并在 ~/.ssh/config 中添加该主机（若尚未存在）。",
+    vscodeHistoryDesc: "选择一个历史远端文件夹，或「直连」用 VS Code 默认方式连接，也可指定目录打开。",
+    vscodeDirect: "直连（VS Code 默认连接，不打开文件夹）",
+    vscodeNoHistory: "未找到该主机的 VS Code 历史连接。点击下方「直连」将用 VS Code 默认方式连接（不打开文件夹），并在 ~/.ssh/config 中添加该主机（若尚未存在）。",
+    vscodeOpenPathLabel: "指定目录打开",
+    vscodeOpenPathPlaceholder: "远端目录，如 /home/user/project（~ 或相对路径按家目录解析）",
+    vscodeOpenPathButton: "打开",
     vscodeAddedToConfig: "已将该主机以别名「{alias}」写入 ~/.ssh/config。",
     vscodeMissingTitle: "未检测到 VS Code",
     vscodeMissingDesc: "未找到 VS Code（code 可执行文件）。请先安装 VS Code 后再使用此功能。",
@@ -250,9 +253,12 @@ const text = {
 
     // Open in VS Code
     vscodeHistoryTitle: "Open in VS Code",
-    vscodeHistoryDesc: "Pick a recent remote folder, or use \"Direct\" to open the remote home directory.",
-    vscodeDirectHome: "Direct · open home directory",
-    vscodeNoHistory: "No VS Code history found for this host. \"Direct\" below opens the remote home directory and adds the host to ~/.ssh/config if it isn't there yet.",
+    vscodeHistoryDesc: "Pick a recent remote folder, use \"Direct\" for VS Code's default connect, or open a specific directory.",
+    vscodeDirect: "Direct (VS Code default connect, no folder)",
+    vscodeNoHistory: "No VS Code history found for this host. \"Direct\" below connects the VS Code default way (no folder) and adds the host to ~/.ssh/config if it isn't there yet.",
+    vscodeOpenPathLabel: "Open a specific directory",
+    vscodeOpenPathPlaceholder: "Remote path, e.g. /home/user/project (~ or relative resolved against home)",
+    vscodeOpenPathButton: "Open",
     vscodeAddedToConfig: "Added this host to ~/.ssh/config as alias \"{alias}\".",
     vscodeMissingTitle: "VS Code Not Found",
     vscodeMissingDesc: "Could not find VS Code (the code executable). Install VS Code first to use this feature.",
