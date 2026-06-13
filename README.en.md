@@ -37,9 +37,9 @@ A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: e
 
 ## Download & Run
 
-Download `v0.2.4` from GitHub Releases:
+Download `v0.2.5` from GitHub Releases:
 
-- Recommended installer: `SSH Port Forwarder_0.2.4_x64-setup.exe`
+- Recommended installer: `SSH Port Forwarder_0.2.5_x64-setup.exe`
 - Or run the portable build directly: `ssh-port-forwarder.exe`
 
 Before running, make sure the Windows OpenSSH Client is installed and that PowerShell can run:

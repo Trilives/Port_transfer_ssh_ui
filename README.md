@@ -37,9 +37,9 @@
 
 ## 下载与运行
 
-从 GitHub Releases 下载 `v0.2.4`：
+从 GitHub Releases 下载 `v0.2.5`：
 
-- 推荐下载安装包：`SSH Port Forwarder_0.2.4_x64-setup.exe`
+- 推荐下载安装包：`SSH Port Forwarder_0.2.5_x64-setup.exe`
 - 也可以直接运行免安装程序：`ssh-port-forwarder.exe`
 
 运行前请确认 Windows 已安装 OpenSSH Client，并且 PowerShell 中可以执行：
