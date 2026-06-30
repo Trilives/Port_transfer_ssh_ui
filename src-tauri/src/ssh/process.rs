@@ -18,11 +18,35 @@ use crate::util::{lock_error, no_window};
 /// 启动一条转发的 ssh 子进程并登记进运行态。
 pub fn start_tunnel(
     host: Host,
-    forward: Forward,
+    mut forward: Forward,
     state: &AppState,
     app: AppHandle,
     password: Option<String>,
 ) -> Result<(), String> {
+    // 本机端口被占用时自动顺延到第一个空闲端口（仅 local/dynamic 在本机监听）。
+    // 在加锁 tunnels 之前完成，detect_conflict / find_free_port 内部会各自单独加锁。
+    if forward.binds_local_port() && !forward.bind_port.trim().is_empty() {
+        let original = forward.bind_port.trim().to_string();
+        match crate::portcheck::find_free_port(state, &original, &forward.id) {
+            Some(port) if port != original => {
+                forward.bind_port = port.clone();
+                let message = if state.is_zh() {
+                    format!("[{}/{}] 本机端口 {} 被占用，已自动改用空闲端口 {}", host.name, forward.name, original, port)
+                } else {
+                    format!("[{}/{}] local port {} in use, auto-switched to free port {}", host.name, forward.name, original, port)
+                };
+                state.add_log("info", message, Some(&app));
+            }
+            Some(_) => {}
+            None => {
+                // 从该端口起一直到上限都被占用：用占用详情报错。
+                if let Some(conflict) = crate::portcheck::detect_conflict(state, &original, &forward.id) {
+                    return Err(conflict.message(state.is_zh(), &original));
+                }
+            }
+        }
+    }
+
     let mut tunnels = state.tunnels.lock().map_err(lock_error)?;
     if let Some(existing) = tunnels.get_mut(&forward.id) {
         if let Some(child) = existing.child.as_mut() {

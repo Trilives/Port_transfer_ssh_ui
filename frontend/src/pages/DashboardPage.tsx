@@ -1,4 +1,4 @@
-import { Activity, CircleSlash, Globe, Plus, PlugZap, Server } from "lucide-react";
+import { Activity, CircleSlash, Code2, Globe, Pin, Plus, PlugZap, Server, Terminal } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { cn } from "../lib/utils";
@@ -20,11 +20,14 @@ export function DashboardPage(props: {
   onStopAll: () => void;
   onDisconnectForward: (host: Host, forward: Forward) => void;
   onOpenForwardWeb: (host: Host, forward: Forward) => void;
+  onOpenTerminal: (host: Host) => void;
+  onOpenVscode: (host: Host) => void;
 }) {
   const lang = props.language;
   const groups = props.hosts
     .map((host) => ({ host, running: (host.forwards ?? []).filter((forward) => forward.status === "running") }))
     .filter((group) => group.running.length > 0);
+  const pinned = props.hosts.filter((host) => host.pinned);
   const keyEvents = props.logs.filter(isKeyEvent).slice(-8).reverse();
 
   return (
@@ -92,6 +95,54 @@ export function DashboardPage(props: {
           </div>
         )}
       </Card>
+
+      {pinned.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Pin size={15} className="fill-current text-blue-600 dark:text-blue-300" />
+              {t(lang, "pinnedHosts")}
+            </CardTitle>
+            <CardDescription>{t(lang, "pinnedHostsDesc")}</CardDescription>
+          </CardHeader>
+          <div className="grid gap-2">
+            {pinned.map((host) => (
+              <div
+                key={host.id}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950"
+              >
+                <div className="flex min-w-[10rem] flex-1 items-center gap-2">
+                  <Server size={16} className="shrink-0 text-blue-600 dark:text-blue-300" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{host.name}</div>
+                    <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                      {`${host.sshUser ? `${host.sshUser}@` : ""}${host.sshHost || "?"}:${host.sshPort || "22"}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="ghost"
+                    onClick={() => props.onOpenTerminal(host)}
+                    aria-label={t(lang, "openTerminal")}
+                    title={t(lang, "openTerminal")}
+                  >
+                    <Terminal size={16} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => props.onOpenVscode(host)}
+                    aria-label={t(lang, "openInVscode")}
+                    title={t(lang, "openInVscode")}
+                  >
+                    <Code2 size={16} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

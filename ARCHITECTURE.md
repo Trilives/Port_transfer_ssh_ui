@@ -85,7 +85,8 @@ store.rs           read_json / write_json、数据目录路径、AppState 持久
 validate.rs        validate_host / validate_forward
 portcheck.rs       本机端口占用检测 + 占用进程名/PID（netstat + tasklist）
 sshconfig.rs       解析/写入 ~/.ssh/config（导入主机、导出到托管区块、按 IP 查别名/追加条目）
-vscode.rs          VS Code Remote-SSH：检测安装、读 storage.json 历史连接、按 IP 匹配、打开 folder-uri
+vscode.rs          VS Code Remote-SSH：检测安装、读历史连接（state.vscdb 的 folder.history.v1 优先、
+                   storage.json 兜底）、按 IP 匹配、按需写 ~/.ssh/config（别名空白转下划线）、打开 folder-uri
 ssh/
   mod.rs           子模块再导出
   command.rs       build_ssh / build_probe / build_key_upload / build_send 命令构造
@@ -111,7 +112,7 @@ commands/
 App.tsx              壳：导航、页面路由、数据加载/刷新、所有动作与弹窗编排、主题应用
 types.ts  api.ts  i18n.ts
 pages/
-  DashboardPage.tsx  主页监控板：完整当前连接 + 关键事件摘要（连接/断开/错误，限量）
+  DashboardPage.tsx  主页监控板：完整当前连接 + 置顶主机快捷区（发送指令/打开终端/VS Code）+ 关键事件摘要
   ConfigPage.tsx     配置：主机列表(一级)展开 + 转发(二级) + 全部增删改与操作入口
   LogsPage.tsx       完整日志表，按等级过滤
   SettingsPage.tsx   主题/语言/日志等级；选项随语言切换，默认 light
@@ -139,7 +140,7 @@ components/
 | 导入导出 | `read_import_file -> [Host]` / `read_import_ssh_config -> [Host]` | 选文件/读 ~/.ssh/config 解析为主机供前端勾选 |
 | | `import_hosts(hosts, strategy) -> ImportResult` | 按 sshHost 去重；strategy=""探测冲突、overwrite、skip |
 | | `export_hosts_to_file(hostIds) -> bool` | 选文件导出完整主机（含转发）|
-| | `export_hosts_to_ssh_config(hostIds)` | 写 ~/.ssh/config 托管区块（仅 ssh 可解析字段）|
+| | `export_hosts_to_ssh_config(hostIds)` | 写 ~/.ssh/config 托管区块（仅 ssh 可解析字段；`Host` 别名里的空白转下划线，避免 ssh/VS Code 解析异常）|
 | 转发 | `save_forward(hostId, forward) -> HostView` | 不校验参数、不查端口占用；均留到连接时判断 |
 | | `delete_forward(hostId, forwardId)` | |
 | | `connect_forward(hostId, forwardId)` | 复用父主机参数；先 probe |
@@ -155,7 +156,7 @@ components/
 | 系统环境 | `check_ssh -> bool` | 检测 `ssh.exe` 是否可用 |
 | | `install_openssh()` | 提权 PowerShell 运行 `Add-WindowsCapability` 安装 OpenSSH 客户端 |
 | VS Code | `vscode_status -> {installed, remoteSsh}` | 检测 Code.exe 与 Remote-SSH 扩展 |
-| | `vscode_ssh_history(hostId) -> [{uri, path}]` | 按主机 IP 匹配 storage.json 里的远端历史文件夹 |
+| | `vscode_ssh_history(hostId) -> [{uri, path}]` | 按主机 IP 匹配远端历史文件夹；优先 state.vscdb 的 folder.history.v1（最新），storage.json 兜底，按路径去重 |
 | | `vscode_open(uri)` | `code --folder-uri <uri>` 重开历史文件夹 |
 | | `vscode_open_direct(hostId) -> {addedToConfig, alias}` | 直连：必要时写入 ~/.ssh/config，`code --remote ssh-remote+<别名>` 打开不带文件夹的已连接窗口 |
 | | `vscode_open_path(hostId, path) -> {addedToConfig, alias}` | 打开指定远端目录；绝对路径原样，`~`/相对路径探测 `$HOME` 后解析 |
@@ -167,14 +168,19 @@ components/
 
 ## 5. 关键流程
 
-### 端口冲突检测（local / dynamic 监听本机端口时）
+### 本机端口占用自动避让（local / dynamic 监听本机端口时）
 
-1. 应用内：bindPort 是否已被本应用另一条运行中的转发占用 → 报错指出是哪条转发。
+连接时 `start_tunnel` 先用 `find_free_port` 从配置的 bindPort 起递增（最多 200 个）找空闲端口，
+单个端口的冲突判定（`detect_conflict`）有两层：
+
+1. 应用内：bindPort 是否已被本应用另一条运行中的转发占用。
 2. 操作系统：`netstat -ano -p tcp` 找 `LISTENING` 且端口匹配的 PID，
    再用 `tasklist /FI "PID eq <pid>" /FO CSV /NH` 取进程名（均 `CREATE_NO_WINDOW`）。
 
-报错示例：`端口 8000 已被进程 chrome.exe (PID 1234) 占用`。
-remote 模式监听在远端，本机不检查。
+找到空闲端口后以它监听，并记一条 info 日志（如「本机端口 8000 被占用，已自动改用空闲端口 8001」）；
+运行态 `ManagedTunnel.forward` 保存实际端口，`forward_view` 据此覆盖 bindDisplay/bindPort，
+使主页、转发行与「网页打开」都指向真正在监听的端口。仅当从该端口起 200 个都被占满时才报错
+（沿用占用详情：`端口 8000 已被进程 chrome.exe (PID 1234) 占用`）。remote 模式监听在远端，本机不检查。
 
 ### 转发连接 / 自动重连
 
@@ -210,10 +216,12 @@ remote 模式监听在远端，本机不检查。
 「打开终端」按钮右侧下拉提供「通过 VS Code 打开」。流程：
 
 1. `vscode_status`：找不到 Code.exe → 提示未安装；找到但无 Remote-SSH 扩展 → 提示装扩展。
-2. `vscode_ssh_history(hostId)`：读 `%APPDATA%\Code\User\globalStorage\storage.json` 的
-   `profileAssociations.workspaces`，key 为 `vscode-remote://ssh-remote+<authority>/<path>`。
-   authority 为裸 IP，或 hex 的 `{"hostName":"别名"}`；别名经 `~/.ssh/config` 的 `HostName`
-   解析回 IP，与主机 IP 比对，列出命中的远端文件夹。
+2. `vscode_ssh_history(hostId)`：合并两个来源后按路径去重——
+   **首选** `state.vscdb`（SQLite，read-only）`ItemTable` 里 key=`ms-vscode-remote.remote-ssh` 的
+   `folder.history.v1`（authority → 最近打开目录列表，随每次打开即时更新，避免 storage.json 滞后导致
+   只看到旧记录）；**兜底** `storage.json` 的 `profileAssociations.workspaces`（key 为文件夹 URI）。
+   两者 authority 均为裸 IP 或 hex 的 `{"hostName":"别名"}`；别名经 `~/.ssh/config` 的 `HostName`
+   解析回 IP，与主机 IP 比对，列出命中的远端文件夹。SQLite 读取走 `rusqlite`（bundled）。
 3. 弹窗第一项「直连」→ `vscode_open_direct`：在 config 找该 IP 的别名，没有就以主机名（冲突时退回
    IP）追加一条 `Host` 写入 config 并提示；再 `code --remote ssh-remote+<别名>` 用 VS Code 默认方式
    打开不带文件夹的已连接窗口。历史项 → `vscode_open` 原样重开该历史 URI。弹窗底部「指定目录打开」

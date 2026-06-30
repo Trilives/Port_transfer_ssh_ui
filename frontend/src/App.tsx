@@ -505,6 +505,14 @@ export function App() {
     }
   }
 
+  function openSendCommand(host: Host) {
+    setSendCmd({ hostId: host.id, hostName: host.name });
+    setCommand("");
+    setCommandOutput("");
+    setSendCmdPwOpen(false);
+    setSendCmdPwValue("");
+  }
+
   async function openTerminal(host: Host) {
     try {
       await api.openTerminal(host.id);
@@ -655,6 +663,8 @@ export function App() {
                 }}
                 onDisconnectForward={disconnectForward}
                 onOpenForwardWeb={(_host, forward) => openForwardWeb(forward)}
+                onOpenTerminal={openTerminal}
+                onOpenVscode={openVscode}
               />
             )}
             {page === "config" && (
@@ -667,13 +677,7 @@ export function App() {
                 onEditHost={(host) => setHostDialog(host)}
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onTogglePin={toggleHostPin}
-                onSendCommand={(host) => {
-                  setSendCmd({ hostId: host.id, hostName: host.name });
-                  setCommand("");
-                  setCommandOutput("");
-                  setSendCmdPwOpen(false);
-                  setSendCmdPwValue("");
-                }}
+                onSendCommand={openSendCommand}
                 onOpenTerminal={openTerminal}
                 onOpenVscode={openVscode}
                 onUploadKey={requestKeyUpload}

@@ -1,21 +1,28 @@
 //! 通过 VS Code 的 Remote-SSH 打开远端主机：检测安装、读取历史连接、按需写入
 //! `~/.ssh/config` 并用 `code --folder-uri` 打开。
 //!
-//! 历史连接来自 VS Code 的 `storage.json` → `profileAssociations.workspaces`，其 key 是
-//! 形如 `vscode-remote://ssh-remote%2B<authority>/<path>` 的文件夹 URI。authority 有两种：
-//! 裸 IP（按 IP 直连过），或 hex 编码的 `{"hostName":"<别名>"}`（按 ssh config 别名连过）。
-//! 别名通过本机 `~/.ssh/config` 的 `HostName` 解析回 IP，再与主机 IP 比对。
+//! 历史连接有两个来源，按 IP 命中后合并去重（同一路径只保留一条）：
+//! 1. **首选** Remote-SSH 扩展自己维护的 `folder.history.v1`，存在 `state.vscdb`（SQLite）的
+//!    `ItemTable` 里 key=`ms-vscode-remote.remote-ssh`。这是最新、最全的「最近打开的远端文件夹」，
+//!    随每次打开即时更新，能避免 `storage.json` 滞后导致看到的是旧记录。
+//! 2. **兜底** `storage.json` → `profileAssociations.workspaces`，其 key 是形如
+//!    `vscode-remote://ssh-remote%2B<authority>/<path>` 的文件夹 URI。
+//!
+//! 两个来源的 authority 同样有两种：裸 IP（按 IP 直连过），或 hex 编码的
+//! `{"hostName":"<别名>"}`（按 ssh config 别名连过）。别名通过本机 `~/.ssh/config` 的
+//! `HostName` 解析回 IP，再与主机 IP 比对。
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use serde::Serialize;
 
 use crate::model::Host;
 use crate::ssh::command::build_send_command;
-use crate::sshconfig::{append_host_stanza, find_alias_for_ip, parse_ssh_config, ssh_config_path};
+use crate::sshconfig::{append_host_stanza, find_alias_for_ip, parse_ssh_config, sanitize_alias, ssh_config_path};
 use crate::util::no_window;
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,43 +67,104 @@ pub fn status() -> VscodeStatus {
 }
 
 /// 读取与指定 IP 对应的所有 VS Code 历史远端文件夹。
+/// 先取 Remote-SSH 扩展最新的 `folder.history.v1`，再用 `storage.json` 兜底，按路径去重。
 pub fn ssh_history_for_ip(ip: &str) -> Vec<VscodeHistoryEntry> {
     let ip = ip.trim();
     if ip.is_empty() {
         return Vec::new();
     }
     let alias_map = alias_to_ip_map();
-    let Some(path) = storage_json_path() else {
-        return Vec::new();
-    };
-    let Ok(text) = fs::read_to_string(&path) else {
-        return Vec::new();
-    };
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-        return Vec::new();
-    };
-    let Some(workspaces) = json
-        .get("profileAssociations")
-        .and_then(|value| value.get("workspaces"))
-        .and_then(|value| value.as_object())
-    else {
-        return Vec::new();
-    };
-
     let mut out = Vec::new();
-    let mut seen = HashSet::new();
-    for key in workspaces.keys() {
-        let Some((authority, rest)) = parse_remote_uri(key) else {
+    let mut seen_paths = HashSet::new();
+
+    // 1. 首选：Remote-SSH 扩展自维护的最近打开文件夹（最新、最全）。
+    for (authority, paths) in remote_ssh_folder_history() {
+        if resolve_authority_ip(&authority, &alias_map).as_deref() != Some(ip) {
             continue;
-        };
-        if resolve_authority_ip(&authority, &alias_map).as_deref() == Some(ip) && seen.insert(key.clone()) {
-            out.push(VscodeHistoryEntry {
-                uri: key.clone(),
-                path: percent_decode(&rest),
-            });
+        }
+        for path in paths {
+            if seen_paths.insert(path.clone()) {
+                let uri = format!("vscode-remote://ssh-remote+{}{}", authority, percent_encode_path(&path));
+                out.push(VscodeHistoryEntry { uri, path });
+            }
+        }
+    }
+
+    // 2. 兜底：storage.json 的 profileAssociations.workspaces（可能滞后，补充扩展里没有的条目）。
+    if let Some(workspaces) = read_profile_association_workspaces() {
+        for key in workspaces {
+            let Some((authority, rest)) = parse_remote_uri(&key) else {
+                continue;
+            };
+            if resolve_authority_ip(&authority, &alias_map).as_deref() != Some(ip) {
+                continue;
+            }
+            let path = percent_decode(&rest);
+            if seen_paths.insert(path.clone()) {
+                out.push(VscodeHistoryEntry { uri: key, path });
+            }
         }
     }
     out
+}
+
+/// 读取 `storage.json` 的 `profileAssociations.workspaces` 的所有 key（文件夹 URI）。
+fn read_profile_association_workspaces() -> Option<Vec<String>> {
+    let path = storage_json_path()?;
+    let text = fs::read_to_string(&path).ok()?;
+    let json = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+    let workspaces = json
+        .get("profileAssociations")
+        .and_then(|value| value.get("workspaces"))
+        .and_then(|value| value.as_object())?;
+    Some(workspaces.keys().cloned().collect())
+}
+
+/// 读取 Remote-SSH 扩展 `folder.history.v1`（authority → 最近打开的远端目录列表）。
+/// 来自 `state.vscdb`（SQLite）的 `ItemTable`，key=`ms-vscode-remote.remote-ssh`。
+/// 任何读取失败（文件缺失、被锁、格式变化）都返回空表，由 storage.json 兜底。
+fn remote_ssh_folder_history() -> HashMap<String, Vec<String>> {
+    let mut map = HashMap::new();
+    let Some(value) = read_state_db_item("ms-vscode-remote.remote-ssh") else {
+        return map;
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&value) else {
+        return map;
+    };
+    let Some(history) = json.get("folder.history.v1").and_then(|value| value.as_object()) else {
+        return map;
+    };
+    for (authority, paths) in history {
+        let list: Vec<String> = paths
+            .as_array()
+            .map(|array| array.iter().filter_map(|item| item.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        if !list.is_empty() {
+            map.insert(authority.clone(), list);
+        }
+    }
+    map
+}
+
+/// 以只读方式从 `state.vscdb` 的 `ItemTable` 取某个 key 的值（JSON 文本）。
+fn read_state_db_item(key: &str) -> Option<String> {
+    let path = state_vscdb_path()?;
+    if !path.exists() {
+        return None;
+    }
+    let conn = rusqlite::Connection::open_with_flags(
+        &path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .ok()?;
+    // VS Code 运行时可能短暂持锁；等一会儿再放弃，失败则由 storage.json 兜底。
+    let _ = conn.busy_timeout(Duration::from_millis(800));
+    conn.query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |row| {
+        // value 通常是 TEXT；个别版本存为 BLOB，故两种都试。
+        row.get::<_, String>(0)
+            .or_else(|_| row.get::<_, Vec<u8>>(0).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
+    })
+    .ok()
 }
 
 /// 用 `code --folder-uri <uri>` 打开一个历史远端文件夹。
@@ -205,6 +273,19 @@ fn encode_path(path: &str) -> String {
     path.replace(' ', "%20")
 }
 
+/// 把远端路径百分号编码成 folderUri 里的 path 部分：保留 unreserved 与 `/`，其余按 UTF-8 字节转义。
+/// 用于由 `folder.history.v1` 的裸路径（可能含空格或中文）拼出可直接 `--folder-uri` 打开的 URI。
+fn percent_encode_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for &byte in path.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => out.push(byte as char),
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 // ---- 内部辅助 ----
 
 /// `~/.ssh/config` 中 `别名 -> HostName` 的映射，用于把 VS Code 历史里的别名解析回 IP。
@@ -228,7 +309,8 @@ fn pick_alias(content: &str, host: &Host, ip: &str) -> String {
         .into_iter()
         .map(|host| host.name)
         .collect();
-    let mut candidate = host.name.trim().to_string();
+    // 别名不能含空白（会被 ssh / VS Code 拆成多个模式），统一替换为下划线。
+    let mut candidate = sanitize_alias(host.name.trim());
     if candidate.is_empty() {
         candidate = ip.to_string();
     }
@@ -310,14 +392,18 @@ fn percent_decode(text: &str) -> String {
 
 /// VS Code 用户数据目录下的 `storage.json` 路径。
 fn storage_json_path() -> Option<PathBuf> {
+    Some(global_storage_dir()?.join("storage.json"))
+}
+
+/// VS Code 用户数据目录下的 `state.vscdb`（SQLite）路径。
+fn state_vscdb_path() -> Option<PathBuf> {
+    Some(global_storage_dir()?.join("state.vscdb"))
+}
+
+/// `%APPDATA%\Code\User\globalStorage` 目录。
+fn global_storage_dir() -> Option<PathBuf> {
     let appdata = std::env::var_os("APPDATA")?;
-    Some(
-        PathBuf::from(appdata)
-            .join("Code")
-            .join("User")
-            .join("globalStorage")
-            .join("storage.json"),
-    )
+    Some(PathBuf::from(appdata).join("Code").join("User").join("globalStorage"))
 }
 
 /// `~/.vscode/extensions` 下是否存在 Remote-SSH 主扩展目录（排除 remote-ssh-edit）。

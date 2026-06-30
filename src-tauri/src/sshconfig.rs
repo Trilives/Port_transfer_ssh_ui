@@ -84,6 +84,16 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
     hosts
 }
 
+/// SSH config 的 `Host <别名>` 里别名不能含空白：ssh 会把空白当分隔符拆成多个模式，
+/// VS Code 的 `ssh-remote+<别名>` 也会因此解析异常。统一把空白字符替换为下划线。
+pub fn sanitize_alias(alias: &str) -> String {
+    alias
+        .trim()
+        .chars()
+        .map(|ch| if ch.is_whitespace() { '_' } else { ch })
+        .collect()
+}
+
 /// 在 config 中找到 `HostName` 等于该 IP 的第一个别名（用于 VS Code 按 IP 复用已有条目）。
 pub fn find_alias_for_ip(content: &str, ip: &str) -> Option<String> {
     let ip = ip.trim();
@@ -102,7 +112,7 @@ pub fn append_host_stanza(content: &str, alias: &str, host: &Host) -> String {
     }
     out.push('\n');
     out.push_str("# added by ssh-port-forwarder\n");
-    out.push_str(&format!("Host {alias}\n"));
+    out.push_str(&format!("Host {}\n", sanitize_alias(alias)));
     if !host.ssh_host.trim().is_empty() {
         out.push_str(&format!("    HostName {}\n", host.ssh_host.trim()));
     }
@@ -138,11 +148,12 @@ pub fn render_managed_block(hosts: &[Host]) -> String {
     out.push_str(BLOCK_BEGIN);
     out.push('\n');
     for host in hosts {
-        let alias = if host.name.trim().is_empty() {
+        let raw_alias = if host.name.trim().is_empty() {
             host.ssh_host.trim()
         } else {
             host.name.trim()
         };
+        let alias = sanitize_alias(raw_alias);
         if alias.is_empty() {
             continue;
         }

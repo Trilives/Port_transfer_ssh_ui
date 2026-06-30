@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { FolderOpen, FolderSearch, Plug, X } from "lucide-react";
+import { FolderOpen, FolderSearch, PenLine, Plug, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -57,8 +57,18 @@ export function HostDialog(props: {
       <DialogHeader title={t(lang, "hostDialogTitle")} description={t(lang, "hostDialogDesc")} onClose={props.onClose} />
       <div className="grid grid-cols-2 gap-4">
         <Field label={t(lang, "name")} value={props.draft.name} onChange={(v) => update("name", v)} />
-        <Field label={t(lang, "sshUser")} value={props.draft.sshUser} onChange={(v) => update("sshUser", v)} />
-        <Field label={t(lang, "sshHost")} value={props.draft.sshHost} onChange={(v) => update("sshHost", v)} />
+        <Field
+          label={t(lang, "sshUser")}
+          value={props.draft.sshUser}
+          onChange={(v) => update("sshUser", v)}
+          hint={t(lang, "sshUserHint")}
+        />
+        <Field
+          label={t(lang, "sshHost")}
+          value={props.draft.sshHost}
+          onChange={(v) => update("sshHost", v)}
+          hint={t(lang, "sshHostHint")}
+        />
         <Field label={t(lang, "sshPort")} value={props.draft.sshPort} onChange={(v) => update("sshPort", v)} />
         <div className="col-span-2">
           <Field
@@ -111,12 +121,32 @@ export function ForwardDialog(props: {
             <option value="dynamic">dynamic</option>
           </Select>
         </label>
-        <Field label={t(lang, "bindHost")} value={props.draft.bindHost} onChange={(v) => update("bindHost", v)} />
-        <Field label={t(lang, "bindPort")} value={props.draft.bindPort} onChange={(v) => update("bindPort", v)} />
+        <Field
+          label={t(lang, "bindHost")}
+          value={props.draft.bindHost}
+          onChange={(v) => update("bindHost", v)}
+          hint={t(lang, "bindHostHint")}
+        />
+        <Field
+          label={t(lang, "bindPort")}
+          value={props.draft.bindPort}
+          onChange={(v) => update("bindPort", v)}
+          hint={t(lang, "bindPortHint")}
+        />
         {!isDynamic && (
           <>
-            <Field label={t(lang, "targetHost")} value={props.draft.targetHost} onChange={(v) => update("targetHost", v)} />
-            <Field label={t(lang, "targetPort")} value={props.draft.targetPort} onChange={(v) => update("targetPort", v)} />
+            <Field
+              label={t(lang, "targetHost")}
+              value={props.draft.targetHost}
+              onChange={(v) => update("targetHost", v)}
+              hint={t(lang, "targetHostHint")}
+            />
+            <Field
+              label={t(lang, "targetPort")}
+              value={props.draft.targetPort}
+              onChange={(v) => update("targetPort", v)}
+              hint={t(lang, "targetPortHint")}
+            />
           </>
         )}
         <label className="col-span-2 flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm font-medium dark:bg-slate-900">
@@ -516,15 +546,27 @@ export function VscodeHistoryDialog(props: {
             <span className="min-w-0 flex-1 truncate">{t(lang, "vscodeDirect")}</span>
           </button>
           {props.entries.map((entry) => (
-            <button
+            <div
               key={entry.uri}
-              onClick={() => props.onOpenEntry(entry.uri)}
-              title={entry.path}
-              className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+              className="flex items-center rounded-xl text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
             >
-              <FolderOpen size={16} className="shrink-0 text-slate-400" />
-              <span className="min-w-0 flex-1 truncate">{entry.path}</span>
-            </button>
+              <button
+                onClick={() => props.onOpenEntry(entry.uri)}
+                title={entry.path}
+                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
+              >
+                <FolderOpen size={16} className="shrink-0 text-slate-400" />
+                <span className="min-w-0 flex-1 truncate">{entry.path}</span>
+              </button>
+              <button
+                onClick={() => setCustomPath(entry.path)}
+                title={t(lang, "vscodeFillPath")}
+                aria-label={t(lang, "vscodeFillPath")}
+                className="mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <PenLine size={15} />
+              </button>
+            </div>
           ))}
         </div>
         <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">

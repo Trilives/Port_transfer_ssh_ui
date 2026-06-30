@@ -18,16 +18,16 @@ A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: e
 - **Open in browser**: a running forward can be opened in your default browser at its listening port (`http://<bind host>:<local port>`, with `0.0.0.0` treated as `127.0.0.1`) — available on both the Home and History pages; most useful for Local forwards.
 - **Send command**: run a single command on the host over SSH, with output shown in a dialog; works passwordless or with a one-time password.
 - **Open terminal**: launches an external PowerShell window already connected to the server over SSH, with Tab completion.
-- **Open in VS Code**: a dropdown next to "Open terminal" adds "Open in VS Code". It reads VS Code's Remote-SSH history and lists the remote folders previously opened for this host (matched by IP); click one to open it over Remote-SSH. You can also "Direct" connect (VS Code's default, no folder) or open a specific directory (type a remote path; `~`/relative is resolved against home). "Direct" adds an alias to `~/.ssh/config` if needed. VS Code's install location is detected automatically (including via the registry, so non-standard drives work); a dialog warns if VS Code or the Remote-SSH extension is missing.
+- **Open in VS Code**: a dropdown next to "Open terminal" adds "Open in VS Code". It reads VS Code's Remote-SSH history (preferring the extension's own up-to-date list so you don't just see stale entries) and lists the remote folders previously opened for this host (matched by IP); click one to open it over Remote-SSH, or click the button on its right to fill that path into the directory box below for further editing. You can also "Direct" connect (VS Code's default, no folder) or open a specific directory (type a remote path; `~`/relative is resolved against home). "Direct" adds an alias to `~/.ssh/config` if needed (spaces in the alias become underscores to avoid parse errors). VS Code's install location is detected automatically (including via the registry, so non-standard drives work); a dialog warns if VS Code or the Remote-SSH extension is missing.
 - **Upload key**: writes your local public key into the remote `authorized_keys` for passwordless login (it first checks whether passwordless access already works).
 - **Jump host (ProxyJump)**: a host can specify a jump host to connect through another machine (optional).
 - **Import / export hosts**: import from an exported file or your local `~/.ssh/config`; export to a file (with forwards and ports, re-importable) or write into `~/.ssh/config` (only the ssh-resolvable parts). Deduplicated by host IP — on conflict, choose "Overwrite all" or "Import non-duplicates only".
 - **Config edits take effect immediately**: changing a host's IP or user restarts that host's running forwards; changing a forward's ip / port disconnects and reconnects just that forward.
 - The host list supports **pinning** and is sorted by last modified time, newest first.
-- **Port-conflict check before creating a forward**: if the bind port is taken, the dialog tells you which of the app's own forwards, or which local process (with PID), is using it.
+- **Automatic local-port fallback**: on connect, if the configured local port is already in use, it auto-increments (+1) to the first free port and listens there; the Home page and "Open in browser" show the actual port. It only errors if a whole range from that port is occupied (and then names the forward or process, with PID).
 - Authentication is detected automatically on connect: passwordless if possible, otherwise a password prompt appears (passwords are never written to config).
 - If the remote host key changes, a dialog warns you so you can verify the fingerprint before deciding to trust the new key and retry.
-- The Home page is a lightweight dashboard: current connections are shown in full, grouped by host (two columns), each forward can be disconnected individually, and there is a "New" shortcut; full logs live on a separate Logs page.
+- The Home page is a lightweight dashboard: current connections are shown in full, grouped by host (two columns), each forward can be disconnected individually, and there is a "New" shortcut; pinned hosts get their own block where you can send a command, open a terminal, or open in VS Code directly; full logs live on a separate Logs page.
 - New forwards default to "keep connected" off; once enabled, saving connects automatically and caches the password for reconnects.
 - The config page returns to Home after 3 minutes of inactivity.
 - Log levels: Debug, Info, Warning, Error.
@@ -37,9 +37,9 @@ A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: e
 
 ## Download & Run
 
-Download `v0.2.5` from GitHub Releases:
+Download `v0.2.6` from GitHub Releases:
 
-- Recommended installer: `SSH Port Forwarder_0.2.5_x64-setup.exe`
+- Recommended installer: `SSH Port Forwarder_0.2.6_x64-setup.exe`
 - Or run the portable build directly: `ssh-port-forwarder.exe`
 
 Before running, make sure the Windows OpenSSH Client is installed and that PowerShell can run:

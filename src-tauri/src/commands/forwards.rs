@@ -2,31 +2,11 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::model::{Forward, HostView, TunnelStatus};
-use crate::portcheck::detect_conflict;
 use crate::ssh::process::{restart_forward, start_tunnel, stop_tunnel};
 use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
 use crate::validate::validate_forward;
-
-fn language_is_zh(state: &AppState) -> bool {
-    state
-        .settings
-        .lock()
-        .map(|settings| settings.language == "zh-CN")
-        .unwrap_or(true)
-}
-
-/// 端口冲突检查：仅对 local / dynamic（监听本机端口）生效。
-fn ensure_port_free(state: &AppState, forward: &Forward) -> Result<(), String> {
-    if !forward.binds_local_port() {
-        return Ok(());
-    }
-    if let Some(conflict) = detect_conflict(state, &forward.bind_port, &forward.id) {
-        return Err(conflict.message(language_is_zh(state), forward.bind_port.trim()));
-    }
-    Ok(())
-}
 
 #[tauri::command]
 pub fn save_forward(
@@ -119,7 +99,6 @@ pub fn connect_forward(
         return Ok(state.host_view(host));
     }
     validate_forward(&forward)?;
-    ensure_port_free(state.inner(), &forward)?;
     start_tunnel(host, forward, state.inner(), app, None)?;
     Ok(state.host_view(state.find_host(&host_id)?))
 }
@@ -140,7 +119,6 @@ pub fn connect_forward_with_password(
         return Ok(state.host_view(host));
     }
     validate_forward(&forward)?;
-    ensure_port_free(state.inner(), &forward)?;
     start_tunnel(host, forward, state.inner(), app, Some(password))?;
     Ok(state.host_view(state.find_host(&host_id)?))
 }

@@ -32,6 +32,20 @@ impl PortConflict {
     }
 }
 
+/// 从 `start_port` 起递增，返回第一个不与本应用其他转发或系统进程冲突的端口（最多尝试 200 个）。
+/// `start_port` 非法（非数字）时返回 None，交由上层按原值处理。
+pub fn find_free_port(state: &AppState, start_port: &str, exclude_forward_id: &str) -> Option<String> {
+    let mut port: u16 = start_port.trim().parse().ok()?;
+    for _ in 0..200 {
+        let candidate = port.to_string();
+        if detect_conflict(state, &candidate, exclude_forward_id).is_none() {
+            return Some(candidate);
+        }
+        port = port.checked_add(1)?;
+    }
+    None
+}
+
 /// 检测某监听端口是否冲突。`exclude_forward_id` 是当前正在操作的转发，自身不算冲突。
 pub fn detect_conflict(
     state: &AppState,

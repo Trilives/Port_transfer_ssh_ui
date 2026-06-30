@@ -82,13 +82,13 @@ export function GuidePage(props: { language: Language }) {
 
   const tips = isZh
     ? [
-        "新建端口转发前会检查监听端口是否被占用；若被占用会提示是哪条转发或哪个进程（含 PID）。",
+        "连接时若本机端口已被占用，会自动顺延（+1）到第一个空闲端口并以它监听；主页与「网页打开」显示实际端口。",
         "连接出现关键错误（退出码 255）时会弹窗提示一次，并停止该转发的自动重连。",
         "首次连接新主机使用 OpenSSH accept-new 策略；指纹变化时连接被拒绝并弹窗，核对后再信任。",
         "关闭应用时，程序会自动清理由它启动的 SSH 转发进程；外部终端窗口不受影响。",
       ]
     : [
-        "Before creating a forward, the bind port is checked; if taken, it tells you which forward or process (with PID) holds it.",
+        "On connect, if the local port is already in use it auto-increments to the first free port and listens there; the Home page and \"Open in browser\" show the actual port.",
         "On a critical error (exit code 255) a dialog shows once and automatic reconnect for that forward stops.",
         "First-time hosts use OpenSSH accept-new; if a host key changes the connection is refused and a dialog asks you to verify it.",
         "When the app exits, SSH forwards it started are cleaned up; external terminal windows are unaffected.",

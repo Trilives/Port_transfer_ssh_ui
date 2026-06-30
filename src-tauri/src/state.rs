@@ -136,9 +136,19 @@ impl AppState {
         TunnelStatus::Stopped
     }
 
-    pub fn forward_view(&self, forward: Forward) -> ForwardView {
+    pub fn forward_view(&self, mut forward: Forward) -> ForwardView {
+        let status = self.status_for(&forward.id);
+        // 运行中：用实际监听端口（自动避让后可能不同于配置端口）覆盖显示，
+        // 保证主页、转发行与「网页打开」都指向真正在监听的端口。
+        if status == TunnelStatus::Running {
+            if let Ok(tunnels) = self.tunnels.lock() {
+                if let Some(tunnel) = tunnels.get(&forward.id) {
+                    forward.bind_port = tunnel.forward.bind_port.clone();
+                }
+            }
+        }
         ForwardView {
-            status: self.status_for(&forward.id),
+            status,
             bind_display: forward.bind_display(),
             target_display: forward.target_display(),
             forward,
