@@ -8,7 +8,7 @@ use crate::state::AppState;
 use crate::terminal::open_terminal as open_terminal_window;
 use crate::util::no_window;
 
-/// 合并 ssh 输出的 stdout 与 stderr，供弹窗展示。
+/// Merge ssh's stdout and stderr for display in a dialog.
 fn merge_output(output: &Output) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -28,7 +28,7 @@ fn merge_output(output: &Output) -> String {
     combined
 }
 
-/// 通过 SSH 在主机上执行一条指令，返回输出（依赖已配置的免密登录）。
+/// Run a single command on the host over SSH, returning the output (relies on passwordless login being configured).
 #[tauri::command]
 pub fn send_command(
     host_id: String,
@@ -54,7 +54,7 @@ pub fn send_command(
     Ok(merge_output(&output))
 }
 
-/// 通过 SSH 在主机上执行一条指令，使用一次性密码（askpass 注入）。
+/// Run a single command on the host over SSH, using a one-time password (injected via askpass).
 #[tauri::command]
 pub fn send_command_with_password(
     host_id: String,
@@ -86,7 +86,7 @@ pub fn send_command_with_password(
     Ok(merge_output(&output))
 }
 
-/// 打开外部 PowerShell 终端窗口连接到该主机。
+/// Open an external PowerShell terminal window connected to the host.
 #[tauri::command]
 pub fn open_terminal(host_id: String, state: State<AppState>, app: AppHandle) -> Result<(), String> {
     let host = state.find_host(&host_id)?;
@@ -95,14 +95,14 @@ pub fn open_terminal(host_id: String, state: State<AppState>, app: AppHandle) ->
     Ok(())
 }
 
-/// 用系统默认浏览器打开一个 http/https 链接（端口转发的“网页打开”用）。
+/// Open an http/https link with the system default browser (used by the forward's "Open in browser").
 #[tauri::command]
 pub fn open_url(url: String, state: State<AppState>, app: AppHandle) -> Result<(), String> {
     let url = url.trim();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err("Only http/https URLs are allowed.".to_string());
     }
-    // rundll32 的 FileProtocolHandler 会按系统默认关联打开浏览器，不弹控制台窗口。
+    // rundll32's FileProtocolHandler opens the browser via the system's default association, with no console window.
     let mut command = Command::new("rundll32");
     command.args(["url.dll,FileProtocolHandler", url]);
     no_window(&mut command);

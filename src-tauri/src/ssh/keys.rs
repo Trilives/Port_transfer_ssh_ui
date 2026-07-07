@@ -12,7 +12,7 @@ use crate::ssh::process::{apply_askpass, prepare_askpass_helper, write_stdin};
 use crate::state::AppState;
 use crate::util::no_window;
 
-/// 确保本机存在私钥与对应公钥，返回公钥内容。私钥不存在时自动生成 ed25519。
+/// Ensure a private key and its matching public key exist locally, returning the public key content. Auto-generates an ed25519 pair if the private key is missing.
 pub fn ensure_public_key(host: &Host, app: &AppHandle) -> Result<String, String> {
     let private_key = resolve_identity_file(&host.identity_file)?;
     let public_key = PathBuf::from(format!("{}.pub", private_key.to_string_lossy()));

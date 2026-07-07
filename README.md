@@ -1,137 +1,136 @@
 # SSH Port Forwarder
 
-**中文** | [English](README.en.md)
+**English** | [中文](README.zh.md)
 
-一个面向 Windows 的可视化 SSH 管理工具。从 v0.2.0 起以**主机**为中心：每台 SSH 服务器是一个一级目录，其下挂载多条端口转发（二级目录），并支持发送指令、打开终端、上传密钥等操作。
+A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: each SSH server is a top-level item, with multiple port forwards (second level) nested beneath it, plus actions like sending commands, opening a terminal, and uploading keys.
 
-## 界面预览
+## Screenshots
 
-![主页面截图](docs/screenshot-main.png)
+![Main page screenshot](docs/Pictures/screenshot-main.png)
 
-![配置页面截图](docs/screenshot-config.png)
+![Config page screenshot](docs/Pictures/screenshot-config.png)
 
-## 主要功能
+## Features
 
-- **以主机为中心的两级结构**：主机（连接参数）为一级目录，端口转发（监听/目标参数）为二级目录，点击主机即可展开。
-- 支持 Local、Remote、Dynamic SOCKS 三种 SSH 转发模式。
-- 每条转发独立连接、断开，可整机断开和全部断开，支持保持连接自动重连。
-- **网页打开**：运行中的端口转发可一键用系统默认浏览器打开其监听端口（`http://<监听地址>:<本机端口>`，`0.0.0.0` 按 `127.0.0.1` 处理）；主页与历史链接页的端口条都有，最适合 Local 转发。
-- **发送指令**：通过 SSH 在主机上执行一条指令，输出显示在弹窗中；支持免密或一次性密码两种方式。
-- **打开终端**：弹出一个已通过 SSH 连上服务器的外部 PowerShell 窗口，支持 Tab 自动补全。
-- **通过 VS Code 打开**：「打开终端」按钮右侧下拉新增「通过 VS Code 打开」。读取 VS Code Remote-SSH 的历史连接（优先取扩展自维护的最新记录，避免只看到过期条目），按主机 IP 列出该主机下打开过的远端文件夹，点击即用 Remote-SSH 直接打开，或点右侧按钮把该路径填入下方目录框继续编辑；也可「直连」（VS Code 默认方式连接、不打开文件夹）或「指定目录打开」（输入远端路径，`~` 与相对路径按家目录解析）。「直连」会在 `~/.ssh/config` 中按需补一条别名（别名里的空格会转为下划线，避免解析异常）。自动探测 VS Code 安装位置（含注册表，支持非标准盘符）；未安装 VS Code 或 Remote-SSH 扩展时弹窗提示。
-- **上传密钥**：把本机公钥写入远端 `authorized_keys` 配置免密登录（上传前先检测是否已可免密直连）。
-- **跳板机（ProxyJump）**：新建主机可填跳板机字段，经由另一台主机跳转连接（可不填）。
-- **导入 / 导出主机**：从导出文件或本机 `~/.ssh/config` 导入；导出到文件（含转发与端口，可再次导入）或写入 `~/.ssh/config`（仅 ssh 可解析的部分）。按主机 IP 去重，重复时可选「全部覆盖」或「仅导入不重复的」。
-- **编辑配置即时生效**：改主机 IP 或用户会重启该主机下运行中的转发；改某条转发的 ip / 端口会自动断开并重连该条。
-- 主机列表支持**置顶**，并按最后修改时间从新到旧排序。
-- **本机端口占用自动避让**：连接时若配置的本机端口已被占用，会自动顺延（+1）到第一个空闲端口并以它监听，主页与「网页打开」都显示实际端口；仅在该端口起一段范围全被占满时才报错（并指出是哪条转发或哪个进程，含 PID）。
-- 连接时自动判断认证方式：能免密直连就直接连接，需要密码时自动弹窗输入（密码不写入配置）。
-- 检测到远程主机指纹变化时弹窗提示，由你核对指纹后决定是否信任新密钥并重试。
-- 主页是轻量监控板：当前连接按主机分组（左右双栏）完整展示，每条转发可单独断开，并有「新建」快捷入口；置顶的主机会单独成块显示，可直接发送指令、打开终端或用 VS Code 打开；完整日志在独立的「日志」页。
-- 新建端口转发默认不勾选「保持连接」；勾选后保存即自动连接，并暂存密码用于异常重连。
-- 配置页空闲 3 分钟自动跳回主页。
-- 支持 Debug、Info、Warning、Error 日志等级。
-- 支持 dark / light 主题和中文 / 英文界面；**默认浅色**，设置项随界面语言切换。
-- 启动时检测系统是否安装 OpenSSH 客户端；未安装时弹窗提示，可一键安装（管理员权限，从 Windows Update 下载）。
-- 应用退出时自动清理由它启动的 SSH 转发进程；连接进程在后台运行，不额外弹出终端窗口。
+- **Host-centric, two-level structure**: a host (connection parameters) is the top level, and a port forward (bind/target parameters) is the second level — click a host to expand it.
+- Supports Local, Remote, and Dynamic SOCKS forwarding modes.
+- Each forward connects/disconnects independently; you can disconnect a whole host or everything, with keep-alive auto-reconnect.
+- **Open in browser**: a running forward can be opened in your default browser at its listening port (`http://<bind host>:<local port>`, with `0.0.0.0` treated as `127.0.0.1`) — available on both the Home and History pages; most useful for Local forwards.
+- **Send command**: run a single command on the host over SSH, with output shown in a dialog; works passwordless or with a one-time password.
+- **Open terminal**: launches an external PowerShell window already connected to the server over SSH, with Tab completion.
+- **Open in VS Code**: a dropdown next to "Open terminal" adds "Open in VS Code". It reads VS Code's Remote-SSH history (preferring the extension's own up-to-date list so you don't just see stale entries) and lists the remote folders previously opened for this host (matched by IP); click one to open it over Remote-SSH, or click the button on its right to fill that path into the directory box below for further editing. You can also "Direct" connect (VS Code's default, no folder) or open a specific directory (type a remote path; `~`/relative is resolved against home). "Direct" adds an alias to `~/.ssh/config` if needed (spaces in the alias become underscores to avoid parse errors). VS Code's install location is detected automatically (including via the registry, so non-standard drives work); a dialog warns if VS Code or the Remote-SSH extension is missing.
+- **Upload key**: writes your local public key into the remote `authorized_keys` for passwordless login (it first checks whether passwordless access already works).
+- **Jump host (ProxyJump)**: a host can specify a jump host to connect through another machine (optional).
+- **Import / export hosts**: import from an exported file or your local `~/.ssh/config`; export to a file (with forwards and ports, re-importable) or write into `~/.ssh/config` (only the ssh-resolvable parts). Deduplicated by host IP — on conflict, choose "Overwrite all" or "Import non-duplicates only".
+- **Config edits take effect immediately**: changing a host's IP or user restarts that host's running forwards; changing a forward's ip / port disconnects and reconnects just that forward.
+- The host list supports **pinning** and is sorted by last modified time, newest first.
+- **Automatic local-port fallback**: on connect, if the configured local port is already in use, it auto-increments (+1) to the first free port and listens there; the Home page and "Open in browser" show the actual port. It only errors if a whole range from that port is occupied (and then names the forward or process, with PID).
+- Authentication is detected automatically on connect: passwordless if possible, otherwise a password prompt appears (passwords are never written to config).
+- If the remote host key changes, a dialog warns you so you can verify the fingerprint before deciding to trust the new key and retry.
+- The Home page is a lightweight dashboard: current connections are shown in full, grouped by host (two columns), each forward can be disconnected individually, and there is a "New" shortcut; pinned hosts get their own block where you can send a command, open a terminal, or open in VS Code directly; full logs live on a separate Logs page.
+- New forwards default to "keep connected" off; once enabled, saving connects automatically and caches the password for reconnects.
+- The config page returns to Home after 3 minutes of inactivity.
+- Log levels: Debug, Info, Warning, Error.
+- Dark / light themes and Chinese / English UI; **light by default**, and the settings options follow the UI language.
+- On startup it checks whether the OpenSSH client is installed; if not, a dialog offers one-click install (admin rights, downloaded from Windows Update).
+- On exit, it cleans up the SSH forward processes it started; connection processes run in the background without extra terminal windows.
 
-## 下载与运行
+## Download & Run
 
-从 GitHub Releases 下载 `v0.2.6`：
+Download `v0.2.6` from GitHub Releases:
 
-- 推荐下载安装包：`SSH Port Forwarder_0.2.6_x64-setup.exe`
-- 也可以直接运行免安装程序：`ssh-port-forwarder.exe`
+- Recommended installer: `SSH Port Forwarder_0.2.6_x64-setup.exe`
+- Or run the portable build directly: `ssh-port-forwarder.exe`
 
-运行前请确认 Windows 已安装 OpenSSH Client，并且 PowerShell 中可以执行：
+Before running, make sure the Windows OpenSSH Client is installed and that PowerShell can run:
 
 ```powershell
 ssh -V
 ```
 
-## 快速上手
+## Quick Start
 
-1. 打开程序后进入「配置」页，点击「新建主机」，填写 SSH 主机、用户、端口和私钥文件。
-2. 展开该主机，点击「新建端口转发」，填写监听与目标参数。
-3. 在转发上点击「连接」，程序会自动判断认证方式：能免密则直接连接，需要密码时会自动弹出密码输入框。
-4. 在「主页」查看当前连接和关键事件，在「日志」页查看完整运行日志。
+1. Open the app, go to the Config page, click "New Host", and fill in the SSH host, user, port, and private key file.
+2. Expand the host, click "New Forward", and fill in the bind and target parameters.
+3. Click "Connect" on the forward. The app detects the auth method automatically: it connects directly when passwordless, or pops up a password prompt when needed.
+4. Use the Home page to watch current connections and key events, and the Logs page for the full runtime log.
 
-## 常用样例
+## Common Example
 
-如果远程服务器上有一个服务只监听 `127.0.0.1:8000`，你希望在本地浏览器打开它：
+Suppose a service on the remote server listens only on `127.0.0.1:8000` and you want to open it in your local browser:
 
-| 字段 | 填写 |
+| Field | Value |
 | --- | --- |
-| 主机模式 | `local`（在端口转发里选） |
-| SSH 主机 | 服务器 IP 或域名（建主机时填） |
-| SSH 端口 | `22` |
-| SSH 用户 | `root` / `ubuntu` / `deploy` |
-| 监听地址 | `127.0.0.1` |
-| 本机访问端口 | `8000` |
-| 目标地址 | `127.0.0.1` |
-| 远程待映射端口 | `8000` |
+| Mode | `local` (chosen in the port forward) |
+| SSH host | server IP or domain (set on the host) |
+| SSH port | `22` |
+| SSH user | `root` / `ubuntu` / `deploy` |
+| Bind host | `127.0.0.1` |
+| Local access port | `8000` |
+| Target host | `127.0.0.1` |
+| Remote port to map | `8000` |
 
-连接成功后，在本地浏览器访问：
+After connecting, open in your local browser:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-等价命令大致是：
+The equivalent command is roughly:
 
 ```powershell
-ssh -N -T -L 127.0.0.1:8000:127.0.0.1:8000 用户名@服务器地址 -p 22
+ssh -N -T -L 127.0.0.1:8000:127.0.0.1:8000 user@server -p 22
 ```
 
-## 转发模式怎么选
+## Choosing a Forwarding Mode
 
-| 模式 | 适用场景 |
+| Mode | When to use |
 | --- | --- |
-| Local | 把本地端口转发到远程服务器能访问到的服务。最常用，适合远程数据库、远程 Web 服务。 |
-| Remote | 把远程端口反向转发到本机服务。适合临时暴露本地开发服务。 |
-| Dynamic | 创建 SOCKS 代理。通常只需要监听地址和本机访问端口。 |
+| Local | Forward a local port to a service the remote server can reach. Most common — good for remote databases and web services. |
+| Remote | Reverse-forward a remote port to a local service. Good for temporarily exposing a local dev service. |
+| Dynamic | Create a SOCKS proxy. Usually only the bind host and local access port are needed. |
 
-## 密钥文件怎么填
+## Filling in the Key File
 
-主机的「私钥文件」字段：
+The host's "Key File" field:
 
-- 留空：使用默认 `%USERPROFILE%\.ssh\id_ed25519`。
-- 绝对路径：例如 `C:\Users\you\.ssh\id_rsa`。
-- `~` 写法：例如 `~/.ssh/id_ed25519`。
-- 请指向**私钥本身**，不要填 `.pub` 公钥文件。
-- 如果该路径下没有私钥，「上传密钥」会自动生成一对 ed25519 密钥再上传公钥。
+- Empty: uses the default `%USERPROFILE%\.ssh\id_ed25519`.
+- Absolute path: e.g. `C:\Users\you\.ssh\id_rsa`.
+- `~` form: e.g. `~/.ssh/id_ed25519`.
+- Point to the **private key itself**, not the `.pub` public key file.
+- If no private key exists at that path, "Upload Key" generates an ed25519 key pair first and then uploads the public key.
 
-## 密码与密钥
+## Passwords & Keys
 
-推荐优先使用 SSH 密钥或 `ssh-agent`。
+Prefer SSH keys or `ssh-agent`.
 
-如果还没有配置免密登录，可以在主机上点击「上传密钥」，输入一次密码后，程序会把本地公钥写入远程主机的 `authorized_keys`，之后即可免密连接。
+If passwordless login is not set up yet, click "Upload Key" on the host, enter the password once, and the app writes your local public key into the remote host's `authorized_keys` so you can connect without a password afterward.
 
-如果该主机只能用密码登录，直接点击转发的「连接」即可——程序检测到需要密码时会自动弹出密码输入框：
+If the host only allows password login, just click "Connect" on the forward — when a password is required, a prompt appears automatically:
 
-- 密码不会保存到配置文件。
-- 如果开启「保持连接」，密码只会在本次应用运行期间保留在内存中，用于异常断开后的自动重连。
-- 首次连接新主机时，程序使用 OpenSSH 的 `accept-new` 策略自动记录指纹；若之后指纹发生变化，连接会被拒绝并弹窗，由你核对后决定是否信任新密钥。
+- The password is not saved to the config file.
+- If "keep connected" is enabled, the password is kept only in memory during this app session, for reconnecting after unexpected drops.
+- On first connection to a new host, the app records the fingerprint using OpenSSH's `accept-new` policy; if the fingerprint later changes, the connection is refused and a dialog lets you verify before trusting the new key.
 
-> 「发送指令」和「打开终端」依赖已配置好的免密登录。
+> "Send command" and "Open terminal" rely on passwordless login being configured.
 
-## 数据保存位置
+## Where Data Is Stored
 
-主机与转发配置、设置和日志保存在 Windows 应用数据目录中，不会保存在源码目录或程序所在目录。
-v0.1.x 的旧 `profiles.json` 不再使用，启动时会自动备份为 `profiles.json.v0.1.bak`。
+Host and forward config, settings, and logs are stored in the Windows app-data directory, never in the source tree or the program folder.
+The old `profiles.json` from v0.1.x is no longer used; it is backed up to `profiles.json.v0.1.bak` on startup.
 
-## 贡献者
+## Contributors
 
 - Trilives
 - Codex
 - Claude
 
-## 开源协议
+## License
 
-本项目采用 MIT 协议，可自由使用、修改和分发，详见 [LICENSE](LICENSE)。
+This project is licensed under the MIT License — free to use, modify, and distribute. See [LICENSE](LICENSE).
 
-> 这是一时兴起做的小项目，最初只是为了方便自己用，顺手开源出来，欢迎自取。
+> A small project made on a whim, originally just for my own use, open-sourced along the way. Help yourself.
 
-## 技术文档
+## Technical Docs
 
-- 架构、数据模型与模块划分见 [ARCHITECTURE.md](ARCHITECTURE.md)。
-- 开发环境、构建和发布说明见 [TECHNICAL.md](TECHNICAL.md)。
+- Architecture, data model, module layout, tech stack, dev environment, build, and release notes: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

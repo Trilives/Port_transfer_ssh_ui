@@ -11,7 +11,7 @@ use crate::ssh::diagnose::{classify_ssh_failure, format_failure, SshFailureKind}
 use crate::state::AppState;
 use crate::util::{empty_default, no_window};
 
-/// 探测连接，返回 "ready" / "password_required" / "host_key_changed"，或不可达错误。
+/// Probe the connection, returning "ready" / "password_required" / "host_key_changed", or an unreachable error.
 pub fn probe_connection(host: &Host, state: &AppState, app: &AppHandle) -> Result<String, String> {
     let command = build_probe_command(host)?;
     state.add_log("debug", format!("[{}] probe $ {}", host.name, command.join(" ")), Some(app));
@@ -30,9 +30,9 @@ pub fn probe_connection(host: &Host, state: &AppState, app: &AppHandle) -> Resul
     let stderr = String::from_utf8_lossy(&output.stderr);
     match classify_ssh_failure(&stderr) {
         SshFailureKind::HostKeyChanged => Ok("host_key_changed".to_string()),
-        // 已连上主机但免密不可用 / 认证失败 → 弹密码框。
+        // Connected to the host but passwordless isn't available / auth failed → show a password prompt.
         SshFailureKind::AuthRequired => Ok("password_required".to_string()),
-        // 主机不可达 / IP / 端口 / 网络等问题 → 直接报错并说明原因，不要当成需要密码。
+        // Host unreachable / bad IP / port / network issue → error out with the reason directly, don't treat it as needing a password.
         other => Err(format_failure(other.reason(state.is_zh()), &stderr)),
     }
 }

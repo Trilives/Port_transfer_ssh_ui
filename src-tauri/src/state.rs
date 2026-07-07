@@ -5,7 +5,10 @@ use std::{
     fs,
     path::PathBuf,
     process::Child,
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
 };
 use tauri::{AppHandle, Emitter};
 
@@ -15,13 +18,16 @@ use crate::model::{
 use crate::store::read_json;
 use crate::util::lock_error;
 
-/// 运行中的一条转发：记录父主机与转发快照，用于断线自动重连。
+/// A running forward: keeps a snapshot of the parent host and forward, used for auto-reconnect after disconnect.
 pub struct ManagedTunnel {
     pub host: Host,
     pub forward: Forward,
     pub child: Option<Child>,
     pub stop_requested: bool,
     pub password: Option<String>,
+    /// Unique per (re)start. A reconnect watcher only resurrects an entry whose generation still matches its own,
+    /// so a tunnel that was disconnected/deleted (and possibly reconnected) in the meantime can't be revived.
+    pub generation: u64,
 }
 
 impl Drop for ManagedTunnel {
@@ -40,6 +46,8 @@ pub struct AppState {
     pub tunnels: Mutex<HashMap<String, ManagedTunnel>>,
     pub logs: Mutex<Vec<LogEntry>>,
     pub data_dir: PathBuf,
+    /// Monotonic source of `ManagedTunnel::generation` values.
+    tunnel_generation: AtomicU64,
 }
 
 impl AppState {
@@ -49,7 +57,7 @@ impl AppState {
             .unwrap_or_else(|| PathBuf::from(".data"));
         let _ = fs::create_dir_all(&data_dir);
 
-        // v0.1.x 的扁平 profiles.json 不再使用：若存在则备份一次，避免误读旧结构。
+        // The v0.1.x flat profiles.json is no longer used: back it up once if present, to avoid misreading the old structure.
         let legacy = data_dir.join("profiles.json");
         if legacy.exists() {
             let backup = data_dir.join("profiles.json.v0.1.bak");
@@ -64,7 +72,13 @@ impl AppState {
             tunnels: Mutex::new(HashMap::new()),
             logs: Mutex::new(Vec::new()),
             data_dir,
+            tunnel_generation: AtomicU64::new(1),
         }
+    }
+
+    /// Allocate a fresh, unique tunnel generation.
+    pub fn next_tunnel_generation(&self) -> u64 {
+        self.tunnel_generation.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn hosts_path(&self) -> PathBuf {
@@ -116,7 +130,7 @@ impl AppState {
         }
     }
 
-    /// 当前界面语言是否为简体中文（用于本地化后端错误提示）；锁失败时默认中文。
+    /// Whether the current UI language is Simplified Chinese (used to localize backend error messages); defaults to Chinese if the lock fails.
     pub fn is_zh(&self) -> bool {
         self.settings
             .lock()
@@ -138,8 +152,8 @@ impl AppState {
 
     pub fn forward_view(&self, mut forward: Forward) -> ForwardView {
         let status = self.status_for(&forward.id);
-        // 运行中：用实际监听端口（自动避让后可能不同于配置端口）覆盖显示，
-        // 保证主页、转发行与「网页打开」都指向真正在监听的端口。
+        // While running: override the displayed value with the actual listening port (may differ from the configured
+        // port after auto-fallback), so Home, the forward row, and "Open in browser" all point at the port really being listened on.
         if status == TunnelStatus::Running {
             if let Ok(tunnels) = self.tunnels.lock() {
                 if let Some(tunnel) = tunnels.get(&forward.id) {
@@ -186,7 +200,7 @@ impl AppState {
             .ok_or_else(|| "Host not found.".to_string())
     }
 
-    /// 取出主机及其下某条转发的克隆（连接/操作时需要父主机的连接参数）。
+    /// Get a clone of the host together with one of its forwards (connect/operate needs the parent host's connection parameters).
     pub fn find_forward(&self, host_id: &str, forward_id: &str) -> Result<(Host, Forward), String> {
         let host = self.find_host(host_id)?;
         let forward = host

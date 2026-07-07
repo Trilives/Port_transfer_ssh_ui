@@ -3,13 +3,13 @@ use tauri::{AppHandle, State};
 use crate::state::AppState;
 use crate::vscode;
 
-/// 检测 VS Code 与 Remote-SSH 扩展是否已安装。
+/// Check whether VS Code and the Remote-SSH extension are installed.
 #[tauri::command]
 pub fn vscode_status() -> vscode::VscodeStatus {
     vscode::status()
 }
 
-/// 读取该主机 IP 在 VS Code Remote-SSH 中的历史远端文件夹。
+/// Read this host's IP's history of remote folders in VS Code Remote-SSH.
 #[tauri::command]
 pub fn vscode_ssh_history(
     host_id: String,
@@ -19,7 +19,7 @@ pub fn vscode_ssh_history(
     Ok(vscode::ssh_history_for_ip(&host.ssh_host))
 }
 
-/// 用 VS Code 打开一个历史远端文件夹（原样重开其 URI）。
+/// Open a history remote folder in VS Code (reopens its URI as-is).
 #[tauri::command]
 pub fn vscode_open(uri: String, state: State<AppState>, app: AppHandle) -> Result<(), String> {
     vscode::open_folder_uri(&uri)?;
@@ -27,7 +27,7 @@ pub fn vscode_open(uri: String, state: State<AppState>, app: AppHandle) -> Resul
     Ok(())
 }
 
-/// 直连：必要时把主机写入 ~/.ssh/config，用 VS Code 默认方式打开不带文件夹的已连接远端窗口。
+/// Direct connect: writes the host into ~/.ssh/config if needed, then opens a connected remote window with no folder using VS Code's default mode.
 #[tauri::command]
 pub fn vscode_open_direct(
     host_id: String,
@@ -47,7 +47,7 @@ pub fn vscode_open_direct(
     Ok(result)
 }
 
-/// 用 VS Code 打开指定的远端目录（绝对路径原样；~/相对路径相对家目录解析）。
+/// Open the specified remote directory in VS Code (absolute paths as-is; `~`/relative paths resolved against the home directory).
 #[tauri::command]
 pub fn vscode_open_path(
     host_id: String,

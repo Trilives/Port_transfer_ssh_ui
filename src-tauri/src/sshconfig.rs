@@ -1,5 +1,5 @@
-//! 解析与写入本机 `~/.ssh/config`：导入时取出主机连接参数，导出时把主机写入一个
-//! 受本程序托管的区块（不触碰用户已有的其它条目）。
+//! Parse and write the local `~/.ssh/config`: on import, extract host connection parameters; on export, write hosts into a
+//! block managed by this app (leaving the user's other existing entries untouched).
 
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ use crate::util::now_millis;
 const BLOCK_BEGIN: &str = "# >>> ssh-port-forwarder managed >>>";
 const BLOCK_END: &str = "# <<< ssh-port-forwarder managed <<<";
 
-/// `~/.ssh/config` 路径。
+/// Path to `~/.ssh/config`.
 pub fn ssh_config_path() -> Result<PathBuf, String> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
@@ -19,7 +19,7 @@ pub fn ssh_config_path() -> Result<PathBuf, String> {
     Ok(PathBuf::from(home).join(".ssh").join("config"))
 }
 
-/// 解析 ssh config 文本为主机列表。按 `Host <alias>` 分块，跳过通配（含 `*`/`?`）。
+/// Parse ssh config text into a host list. Splits into blocks by `Host <alias>`, skipping wildcards (containing `*`/`?`).
 pub fn parse_ssh_config(content: &str) -> Vec<Host> {
     let mut hosts: Vec<Host> = Vec::new();
     let mut current: Option<Host> = None;
@@ -27,7 +27,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
 
     let flush = |hosts: &mut Vec<Host>, host: Option<Host>, alias: &str| {
         if let Some(mut host) = host {
-            // HostName 缺省时回退到别名本身。
+            // Fall back to the alias itself when HostName is missing.
             if host.ssh_host.trim().is_empty() {
                 host.ssh_host = alias.to_string();
             }
@@ -43,9 +43,9 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
         let (key, value) = split_key_value(line);
         let key_lower = key.to_lowercase();
         if key_lower == "host" {
-            // 收尾上一个块。
+            // Finish off the previous block.
             flush(&mut hosts, current.take(), &alias);
-            // 只取第一个别名；含通配的整块跳过。
+            // Only take the first alias; skip the whole block if it contains a wildcard.
             let first = value.split_whitespace().next().unwrap_or("");
             if first.is_empty() || first.contains('*') || first.contains('?') {
                 current = None;
@@ -84,8 +84,8 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
     hosts
 }
 
-/// SSH config 的 `Host <别名>` 里别名不能含空白：ssh 会把空白当分隔符拆成多个模式，
-/// VS Code 的 `ssh-remote+<别名>` 也会因此解析异常。统一把空白字符替换为下划线。
+/// The alias in SSH config's `Host <alias>` can't contain whitespace: ssh treats whitespace as a separator and splits it
+/// into multiple patterns, which also breaks VS Code's `ssh-remote+<alias>` parsing. Replace whitespace with underscores.
 pub fn sanitize_alias(alias: &str) -> String {
     alias
         .trim()
@@ -94,7 +94,7 @@ pub fn sanitize_alias(alias: &str) -> String {
         .collect()
 }
 
-/// 在 config 中找到 `HostName` 等于该 IP 的第一个别名（用于 VS Code 按 IP 复用已有条目）。
+/// Find the first alias in the config whose `HostName` equals this IP (used by VS Code to reuse an existing entry by IP).
 pub fn find_alias_for_ip(content: &str, ip: &str) -> Option<String> {
     let ip = ip.trim();
     parse_ssh_config(content)
@@ -103,8 +103,8 @@ pub fn find_alias_for_ip(content: &str, ip: &str) -> Option<String> {
         .map(|host| host.name)
 }
 
-/// 在 config 末尾追加一个主机条目（仅写非空、ssh 可解析的字段），返回新的完整文本。
-/// 不触碰已有内容，与托管区块互不影响。
+/// Append a host entry to the end of the config (writes only non-empty, ssh-parsable fields), returning the new full text.
+/// Leaves existing content untouched and doesn't interact with the managed block.
 pub fn append_host_stanza(content: &str, alias: &str, host: &Host) -> String {
     let mut out = content.to_string();
     if !out.is_empty() && !out.ends_with('\n') {
@@ -131,7 +131,7 @@ pub fn append_host_stanza(content: &str, alias: &str, host: &Host) -> String {
     out
 }
 
-/// `Key value` 或 `Key=value`，返回去引号的值。
+/// `Key value` or `Key=value`; returns the unquoted value.
 fn split_key_value(line: &str) -> (String, String) {
     let (key, rest) = match line.find(|c: char| c.is_whitespace() || c == '=') {
         Some(idx) => (line[..idx].to_string(), line[idx..].to_string()),
@@ -142,7 +142,7 @@ fn split_key_value(line: &str) -> (String, String) {
     (key, value.to_string())
 }
 
-/// 把主机列表渲染成 ssh config 条目（只写非空、ssh 可解析的字段）。
+/// Render the host list into ssh config entries (writes only non-empty, ssh-parsable fields).
 pub fn render_managed_block(hosts: &[Host]) -> String {
     let mut out = String::new();
     out.push_str(BLOCK_BEGIN);
@@ -180,7 +180,7 @@ pub fn render_managed_block(hosts: &[Host]) -> String {
     out
 }
 
-/// 取出托管区块以外的内容（用户自己写的条目），用于查重时排除本程序托管的部分。
+/// Extract the content outside the managed block (the user's own entries), used to exclude this app's managed part when deduplicating.
 pub fn strip_managed_block(content: &str) -> String {
     let begin = content.find(BLOCK_BEGIN);
     let end = content.find(BLOCK_END);
@@ -197,14 +197,14 @@ pub fn strip_managed_block(content: &str) -> String {
     content.to_string()
 }
 
-/// 用新的托管区块替换已有区块；没有则追加到文件末尾。区块外内容原样保留。
+/// Replace the existing managed block with the new one; append to the end of the file if there isn't one. Content outside the block is preserved as-is.
 pub fn upsert_managed_block(existing: &str, block: &str) -> String {
     let begin = existing.find(BLOCK_BEGIN);
     let end = existing.find(BLOCK_END);
     if let (Some(begin), Some(end)) = (begin, end) {
         if end > begin {
             let after = end + BLOCK_END.len();
-            // 连同区块结束行后的一个换行一起替换掉。
+            // Also consume the single newline right after the block's end line.
             let tail = existing[after..].strip_prefix('\n').unwrap_or(&existing[after..]);
             let mut result = String::new();
             result.push_str(&existing[..begin]);

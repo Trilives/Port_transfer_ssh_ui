@@ -11,11 +11,11 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::model::{CriticalErrorPayload, Forward, Host};
 use crate::ssh::command::build_ssh_command;
-use crate::ssh::diagnose::{classify_ssh_failure, SshFailureKind};
+use crate::ssh::diagnose::classify_ssh_failure;
 use crate::state::{AppState, ManagedTunnel};
 use crate::util::{lock_error, no_window};
 
-/// 启动一条转发的 ssh 子进程并登记进运行态。
+/// Start a forward's ssh child process and register it in the runtime state.
 pub fn start_tunnel(
     host: Host,
     mut forward: Forward,
@@ -23,8 +23,8 @@ pub fn start_tunnel(
     app: AppHandle,
     password: Option<String>,
 ) -> Result<(), String> {
-    // 本机端口被占用时自动顺延到第一个空闲端口（仅 local/dynamic 在本机监听）。
-    // 在加锁 tunnels 之前完成，detect_conflict / find_free_port 内部会各自单独加锁。
+    // If the local port is in use, automatically fall forward to the first free port (only local/dynamic listen locally).
+    // Done before locking tunnels; detect_conflict / find_free_port each take their own lock internally.
     if forward.binds_local_port() && !forward.bind_port.trim().is_empty() {
         let original = forward.bind_port.trim().to_string();
         match crate::portcheck::find_free_port(state, &original, &forward.id) {
@@ -39,7 +39,7 @@ pub fn start_tunnel(
             }
             Some(_) => {}
             None => {
-                // 从该端口起一直到上限都被占用：用占用详情报错。
+                // Every port from this one up to the limit is occupied: error out with the conflict details.
                 if let Some(conflict) = crate::portcheck::detect_conflict(state, &original, &forward.id) {
                     return Err(conflict.message(state.is_zh(), &original));
                 }
@@ -80,6 +80,7 @@ pub fn start_tunnel(
     let child = process.spawn().map_err(|err| err.to_string())?;
 
     let forward_id = forward.id.clone();
+    let generation = state.next_tunnel_generation();
     tunnels.insert(
         forward_id.clone(),
         ManagedTunnel {
@@ -88,15 +89,25 @@ pub fn start_tunnel(
             child: Some(child),
             stop_requested: false,
             password,
+            generation,
         },
     );
     drop(tunnels);
     state.add_log("info", format!("[{}/{}] connected", host.name, forward.name), Some(&app));
-    watch_tunnel(forward_id, state.data_dir.clone(), app);
+    watch_tunnel(forward_id, generation, state.data_dir.clone(), app);
     Ok(())
 }
 
-/// 用新的 host/forward 参数重启一条运行中的转发：沿用其暂存密码（若有），先停后起。
+/// Remove a tunnel entry only if it still carries the given generation — never clobber a newer (reconnected) entry.
+fn remove_if_generation(state: &AppState, forward_id: &str, generation: u64) {
+    if let Ok(mut tunnels) = state.tunnels.lock() {
+        if tunnels.get(forward_id).map(|t| t.generation) == Some(generation) {
+            tunnels.remove(forward_id);
+        }
+    }
+}
+
+/// Restart a running forward with new host/forward parameters: reuses its cached password (if any), stop then start.
 pub fn restart_forward(
     host: Host,
     forward: Forward,
@@ -151,7 +162,7 @@ pub fn cleanup_tunnels(state: &AppState, app: Option<&AppHandle>) {
     }
 }
 
-fn watch_tunnel(forward_id: String, data_dir: PathBuf, app: AppHandle) {
+fn watch_tunnel(forward_id: String, generation: u64, data_dir: PathBuf, app: AppHandle) {
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(2));
         let state = app.state::<AppState>();
@@ -163,6 +174,10 @@ fn watch_tunnel(forward_id: String, data_dir: PathBuf, app: AppHandle) {
             let Some(tunnel) = tunnels.get_mut(&forward_id) else {
                 return;
             };
+            // A newer start replaced this entry; that start owns its own watcher — this one should exit.
+            if tunnel.generation != generation {
+                return;
+            }
             let Some(child) = tunnel.child.as_mut() else {
                 return;
             };
@@ -192,14 +207,11 @@ fn watch_tunnel(forward_id: String, data_dir: PathBuf, app: AppHandle) {
         } else {
             format!("[{}] exited with code {:?}: {}", label, code, detail)
         };
-        if code == Some(255) {
-            // 给关键错误标注具体原因（不可达 / 认证失败等），而不是一律按密码处理。
-            let kind = classify_ssh_failure(&stderr);
-            let critical_message = if kind == SshFailureKind::Unknown {
-                message.clone()
-            } else {
-                format!("{}\n\n{}", kind.reason(state.is_zh()), message)
-            };
+        // Only auth / host-key failures are fatal (the user must fix something). Network-layer 255 exits
+        // (timeout, unreachable, refused) and ordinary mid-session drops are transient and should reconnect.
+        let kind = classify_ssh_failure(&stderr);
+        if code == Some(255) && kind.is_fatal() {
+            let critical_message = format!("{}\n\n{}", kind.reason(state.is_zh()), message);
             state.add_log("error", critical_message.clone(), Some(&app));
             let _ = app.emit(
                 "critical-error",
@@ -210,24 +222,33 @@ fn watch_tunnel(forward_id: String, data_dir: PathBuf, app: AppHandle) {
                     message: critical_message,
                 },
             );
-            // 致命错误：移除运行态，停止重连。
-            if let Ok(mut tunnels) = state.tunnels.lock() {
-                tunnels.remove(&forward.id);
-            }
+            remove_if_generation(&state, &forward.id, generation);
             return;
         }
+
         state.add_log("warning", message, Some(&app));
         if stopped_by_user || !forward.keep_connected {
-            if let Ok(mut tunnels) = state.tunnels.lock() {
-                tunnels.remove(&forward.id);
-            }
+            remove_if_generation(&state, &forward.id, generation);
             return;
         }
+
         thread::sleep(Duration::from_secs(3));
-        let _ = fs::create_dir_all(&data_dir);
-        if start_tunnel(host, forward, state.inner(), app.clone(), password).is_err() {
-            return;
+
+        // Re-check after the delay: only reconnect if this exact entry (same generation) still exists and
+        // wasn't stopped meanwhile. This closes the window where a disconnect/delete during the sleep would
+        // otherwise be undone by a stale watcher resurrecting the tunnel.
+        {
+            let Ok(tunnels) = state.tunnels.lock() else {
+                return;
+            };
+            match tunnels.get(&forward.id) {
+                Some(tunnel) if tunnel.generation == generation && !tunnel.stop_requested => {}
+                _ => return,
+            }
         }
+
+        let _ = fs::create_dir_all(&data_dir);
+        let _ = start_tunnel(host, forward, state.inner(), app.clone(), password);
         return;
     });
 }
@@ -235,7 +256,12 @@ fn watch_tunnel(forward_id: String, data_dir: PathBuf, app: AppHandle) {
 pub fn prepare_askpass_helper(data_dir: &PathBuf) -> Result<PathBuf, String> {
     let helper_dir = data_dir.join("helpers");
     fs::create_dir_all(&helper_dir).map_err(|err| err.to_string())?;
-    let helper = helper_dir.join("ssh-port-forwarder-askpass.exe");
+    // Keep "askpass" in the stem (main.rs detects the mode by filename) and the platform's
+    // executable suffix (".exe" on Windows, empty elsewhere).
+    let helper = helper_dir.join(format!(
+        "ssh-port-forwarder-askpass{}",
+        std::env::consts::EXE_SUFFIX
+    ));
     let current_exe = std::env::current_exe().map_err(|err| err.to_string())?;
     let should_copy = match (fs::metadata(&current_exe), fs::metadata(&helper)) {
         (Ok(current), Ok(existing)) => current.len() != existing.len(),
@@ -243,12 +269,20 @@ pub fn prepare_askpass_helper(data_dir: &PathBuf) -> Result<PathBuf, String> {
         _ => true,
     };
     if should_copy {
-        fs::copy(current_exe, &helper).map_err(|err| err.to_string())?;
+        fs::copy(&current_exe, &helper).map_err(|err| err.to_string())?;
+        // On Unix the copy isn't executable by default; ssh must be able to run it as SSH_ASKPASS.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&helper).map_err(|err| err.to_string())?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&helper, perms).map_err(|err| err.to_string())?;
+        }
     }
     Ok(helper)
 }
 
-/// 上传公钥时用到的密码注入辅助：在已有进程上设置 askpass 环境。
+/// Password-injection helper used when uploading a public key: sets the askpass environment on an existing process.
 pub fn apply_askpass(process: &mut Command, helper: PathBuf, password: &str) {
     process
         .env("SSH_ASKPASS", helper)
@@ -257,7 +291,7 @@ pub fn apply_askpass(process: &mut Command, helper: PathBuf, password: &str) {
         .env("SSH_PORT_FORWARDER_PASSWORD", password);
 }
 
-/// 把多个写操作合并：写入 stdin。
+/// Write data to a child process's stdin.
 pub fn write_stdin(child: &mut std::process::Child, data: &[u8]) -> Result<(), String> {
     if let Some(stdin) = child.stdin.as_mut() {
         stdin.write_all(data).map_err(|err| err.to_string())?;

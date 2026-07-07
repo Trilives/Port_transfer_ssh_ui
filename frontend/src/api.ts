@@ -11,13 +11,13 @@ import type {
 } from "./types";
 
 export const api = {
-  // 主机（一级）
+  // Hosts (level 1)
   listHosts: () => invoke<Host[]>("list_hosts"),
   saveHost: (host: Host) => invoke<Host>("save_host", { host }),
   setHostPinned: (id: string, pinned: boolean) => invoke<Host>("set_host_pinned", { id, pinned }),
   deleteHost: (id: string) => invoke<void>("delete_host", { id }),
 
-  // 导入 / 导出
+  // Import / export
   readImportFile: () => invoke<Host[]>("read_import_file"),
   readImportSshConfig: () => invoke<Host[]>("read_import_ssh_config"),
   importHosts: (hosts: Host[], strategy: string) => invoke<ImportResult>("import_hosts", { hosts, strategy }),
@@ -25,7 +25,7 @@ export const api = {
   exportHostsToSshConfig: (hostIds: string[], strategy: string) =>
     invoke<ImportResult>("export_hosts_to_ssh_config", { hostIds, strategy }),
 
-  // 端口转发（二级）
+  // Port forwards (level 2)
   saveForward: (hostId: string, forward: Forward) => invoke<Host>("save_forward", { hostId, forward }),
   deleteForward: (hostId: string, forwardId: string) => invoke<Host>("delete_forward", { hostId, forwardId }),
   connectForward: (hostId: string, forwardId: string) => invoke<Host>("connect_forward", { hostId, forwardId }),
@@ -35,7 +35,7 @@ export const api = {
   disconnectHost: (hostId: string) => invoke<Host>("disconnect_host", { hostId }),
   disconnectAll: () => invoke<void>("disconnect_all"),
 
-  // 指令 / 终端 / 密钥
+  // Command / terminal / keys
   sendCommand: (hostId: string, command: string) => invoke<string>("send_command", { hostId, command }),
   sendCommandWithPassword: (hostId: string, command: string, password: string) =>
     invoke<string>("send_command_with_password", { hostId, command, password }),
@@ -46,7 +46,7 @@ export const api = {
   getHostFingerprint: (hostId: string) => invoke<string>("get_host_fingerprint", { hostId }),
   removeKnownHost: (hostId: string) => invoke<void>("remove_known_host", { hostId }),
 
-  // 系统环境
+  // System environment
   checkSsh: () => invoke<boolean>("check_ssh"),
   installOpenssh: () => invoke<void>("install_openssh"),
 
@@ -57,7 +57,7 @@ export const api = {
   vscodeOpenDirect: (hostId: string) => invoke<VscodeOpenRootResult>("vscode_open_direct", { hostId }),
   vscodeOpenPath: (hostId: string, path: string) => invoke<VscodeOpenRootResult>("vscode_open_path", { hostId, path }),
 
-  // 设置 / 日志
+  // Settings / logs
   getSettings: () => invoke<AppSettings>("get_settings"),
   saveSettings: (settings: AppSettings) => invoke<AppSettings>("save_settings_cmd", { settings }),
   listLogs: (level: string) => invoke<LogEntry[]>("list_logs", { level }),

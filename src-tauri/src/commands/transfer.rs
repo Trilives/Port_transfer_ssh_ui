@@ -14,7 +14,7 @@ use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
 
-/// 导出文件格式：带版本号包裹主机列表（含转发与端口，可再次导入）。
+/// Export file format: a version-tagged wrapper around the host list (including forwards and ports, re-importable).
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ExportBundle {
@@ -25,7 +25,7 @@ struct ExportBundle {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
-    /// "done" 或 "conflict"。
+    /// "done" or "conflict".
     pub status: String,
     pub duplicates: Vec<String>,
     pub added: usize,
@@ -37,7 +37,7 @@ fn dedup_key(host: &Host) -> String {
     host.ssh_host.trim().to_lowercase()
 }
 
-/// 选文件读取并解析为主机列表（供前端勾选）；用户取消返回空列表。
+/// Pick a file, read it, and parse it into a host list (for the frontend to select); returns an empty list if the user cancels.
 #[tauri::command]
 pub fn read_import_file() -> Result<Vec<Host>, String> {
     let Some(path) = FileDialog::new()
@@ -48,7 +48,7 @@ pub fn read_import_file() -> Result<Vec<Host>, String> {
         return Ok(Vec::new());
     };
     let content = fs::read_to_string(&path).map_err(|err| err.to_string())?;
-    // 兼容带版本号的包裹结构与裸数组两种格式。
+    // Support both the version-tagged wrapper and a bare array format.
     if let Ok(bundle) = serde_json::from_str::<ExportBundle>(&content) {
         return Ok(bundle.hosts);
     }
@@ -56,7 +56,7 @@ pub fn read_import_file() -> Result<Vec<Host>, String> {
         .map_err(|err| format!("Invalid import file: {err}"))
 }
 
-/// 读取本机 `~/.ssh/config` 并解析为主机列表（供前端勾选）。
+/// Read the local `~/.ssh/config` and parse it into a host list (for the frontend to select).
 #[tauri::command]
 pub fn read_import_ssh_config() -> Result<Vec<Host>, String> {
     let path = ssh_config_path()?;
@@ -67,7 +67,7 @@ pub fn read_import_ssh_config() -> Result<Vec<Host>, String> {
     Ok(parse_ssh_config(&content))
 }
 
-/// 把选中的主机并入现有列表。strategy: "" 探测冲突、"overwrite" 覆盖、"skip" 仅导入不重复。
+/// Merge the selected hosts into the existing list. strategy: "" detects conflicts, "overwrite" overwrites, "skip" imports only non-duplicates.
 #[tauri::command]
 pub fn import_hosts(
     hosts: Vec<Host>,
@@ -75,7 +75,7 @@ pub fn import_hosts(
     state: State<AppState>,
     app: AppHandle,
 ) -> Result<ImportResult, String> {
-    // 先按 IP 对入参自身去重（保留先出现的）。
+    // First dedup the incoming list itself by IP (keep the first occurrence).
     let mut incoming: Vec<Host> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for host in hosts {
@@ -115,7 +115,7 @@ pub fn import_hosts(
     for mut host in incoming {
         let key = dedup_key(&host);
         if let Some(pos) = existing.iter().position(|item| dedup_key(item) == key) {
-            // 与现有主机 IP 冲突。
+            // Conflicts with an existing host's IP.
             if strategy == "overwrite" {
                 let target = &mut existing[pos];
                 target.name = host.name.clone();
@@ -125,7 +125,7 @@ pub fn import_hosts(
                 target.identity_file = host.identity_file.clone();
                 target.extra_options = host.extra_options.clone();
                 target.proxy_jump = host.proxy_jump.clone();
-                // 入参带转发才替换（config 导入无转发 → 保留原有）。
+                // Only replace forwards if the incoming host has any (a config import has none → keep the existing ones).
                 if !host.forwards.is_empty() {
                     target.forwards = host.forwards.clone();
                 }
@@ -135,7 +135,7 @@ pub fn import_hosts(
                 skipped += 1;
             }
         } else {
-            // 新主机：分配新 id，避免与现有/彼此撞 id。
+            // New host: assign a new id to avoid colliding with existing or sibling entries.
             host.id = Uuid::new_v4().to_string();
             host.updated_at = now;
             existing.push(host);
@@ -168,7 +168,7 @@ fn selected_hosts(state: &AppState, host_ids: &[String]) -> Result<Vec<Host>, St
         .collect())
 }
 
-/// 导出选中主机到指定文件（含转发与端口，可再次导入）。取消返回 false。
+/// Export the selected hosts to a chosen file (including forwards and ports, re-importable). Returns false if canceled.
 #[tauri::command]
 pub fn export_hosts_to_file(
     host_ids: Vec<String>,
@@ -193,9 +193,9 @@ pub fn export_hosts_to_file(
     Ok(true)
 }
 
-/// 导出选中主机到本机 `~/.ssh/config` 的托管区块（只写 ssh 可解析的部分）。
-/// 与导入一致地按 IP 查重：重复指与用户自己写的条目（托管区块以外）撞 IP。
-/// strategy: "" 探测冲突、"overwrite" 全部写入、"skip" 仅写不重复的。
+/// Export the selected hosts into a managed block in the local `~/.ssh/config` (only ssh-parsable fields).
+/// Deduplicates by IP the same way import does: a duplicate means an IP collision with the user's own entries outside the managed block.
+/// strategy: "" detects conflicts, "overwrite" writes all, "skip" writes only non-duplicates.
 #[tauri::command]
 pub fn export_hosts_to_ssh_config(
     host_ids: Vec<String>,
@@ -209,7 +209,7 @@ pub fn export_hosts_to_ssh_config(
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
     let existing = fs::read_to_string(&path).unwrap_or_default();
-    // 托管区块由本程序整体重写，不算冲突；只跟区块以外的用户条目查重。
+    // The managed block is wholly rewritten by this app, so it doesn't count as a conflict; only dedup against entries outside it.
     let outside_ips: std::collections::HashSet<String> = parse_ssh_config(&strip_managed_block(&existing))
         .iter()
         .map(dedup_key)

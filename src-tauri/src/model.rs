@@ -18,7 +18,7 @@ pub enum TunnelStatus {
     Stopped,
 }
 
-/// 二级目录：挂在某个主机下的一条端口转发，只保存转发参数。
+/// Level 2: a single port forward nested under a host, storing only the forwarding parameters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Forward {
@@ -60,13 +60,13 @@ impl Forward {
         }
     }
 
-    /// 仅 local / dynamic 在本机监听端口；remote 监听在远端。
+    /// Only local / dynamic listen on a local port; remote listens on the remote side.
     pub fn binds_local_port(&self) -> bool {
         matches!(self.mode, TunnelMode::Local | TunnelMode::Dynamic)
     }
 }
 
-/// 一级目录：一台 SSH 服务器，保存连接参数与其下的转发列表。
+/// Level 1: an SSH server, storing connection parameters and its list of forwards.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Host {
@@ -77,15 +77,15 @@ pub struct Host {
     pub ssh_user: String,
     pub identity_file: String,
     pub extra_options: String,
-    /// 跳板机（ProxyJump）；可空。形如 `user@jump-host:port`，多级用逗号分隔。
+    /// Jump host (ProxyJump); optional. Shaped like `user@jump-host:port`; use commas for multiple hops.
     #[serde(default)]
     pub proxy_jump: String,
     #[serde(default)]
     pub forwards: Vec<Forward>,
-    /// 是否置顶；置顶的主机排在列表最前。
+    /// Whether pinned; pinned hosts sort to the front of the list.
     #[serde(default)]
     pub pinned: bool,
-    /// 最后修改时间（Unix 毫秒）；列表按其从新到旧排序。
+    /// Last-modified time (Unix ms); the list sorts by this, newest first.
     #[serde(default)]
     pub updated_at: i64,
 }

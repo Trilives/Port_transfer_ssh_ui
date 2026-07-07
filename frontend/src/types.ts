@@ -4,7 +4,7 @@ export type ThemeName = "dark" | "light";
 export type Language = "zh-CN" | "en-US";
 export type LogLevel = "debug" | "info" | "warning" | "error";
 
-/** 二级目录：一条端口转发（含后端附带的视图字段）。 */
+/** Level 2: a single port forward (including view fields attached by the backend). */
 export interface Forward {
   id: string;
   name: string;
@@ -14,13 +14,13 @@ export interface Forward {
   targetHost: string;
   targetPort: string;
   keepConnected: boolean;
-  // 视图字段（list/save 返回时附带）
+  // View fields (attached when list/save returns)
   status?: TunnelStatus;
   bindDisplay?: string;
   targetDisplay?: string;
 }
 
-/** 一级目录：一台 SSH 服务器及其下的转发列表。 */
+/** Level 1: an SSH server and its list of forwards. */
 export interface Host {
   id: string;
   name: string;
@@ -29,15 +29,15 @@ export interface Host {
   sshUser: string;
   identityFile: string;
   extraOptions: string;
-  // 跳板机（ProxyJump），可空。形如 user@jump-host:port，多级用逗号分隔。
+  // Jump host (ProxyJump), optional. Shaped like user@jump-host:port; use commas for multiple hops.
   proxyJump: string;
   forwards: Forward[];
   pinned: boolean;
-  // 视图字段：最后修改时间（Unix 毫秒），列表排序用
+  // View field: last-modified time (Unix ms), used for list sorting
   updatedAt?: number;
 }
 
-/** 导入结果：status="conflict" 时附带重复主机名，需用户选择覆盖策略。 */
+/** Import result: when status="conflict", includes the duplicate host names and requires the user to choose an overwrite strategy. */
 export interface ImportResult {
   status: "done" | "conflict";
   duplicates: string[];
@@ -65,19 +65,19 @@ export interface CriticalErrorPayload {
   message: string;
 }
 
-/** VS Code 与 Remote-SSH 扩展的安装情况。 */
+/** Install status of VS Code and the Remote-SSH extension. */
 export interface VscodeStatus {
   installed: boolean;
   remoteSsh: boolean;
 }
 
-/** 一条 VS Code Remote-SSH 历史远端文件夹。 */
+/** A single VS Code Remote-SSH history remote folder entry. */
 export interface VscodeHistoryEntry {
   uri: string;
   path: string;
 }
 
-/** 直连/打开根目录的结果。 */
+/** Result of a direct connect / open-root-directory action. */
 export interface VscodeOpenRootResult {
   addedToConfig: boolean;
   alias: string;

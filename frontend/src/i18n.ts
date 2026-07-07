@@ -10,14 +10,14 @@ const text = {
     title: "SSH 端口转发",
     subtitle: "以主机为中心，管理 SSH 连接、端口转发、终端与日志。",
 
-    // 导航
+    // Navigation
     dashboard: "主页",
     config: "历史链接",
     logs: "日志",
     settings: "设置",
     guide: "使用说明",
 
-    // 主页 / 监控板
+    // Home / dashboard
     dashboardTitle: "监控板",
     dashboardDesc: "只显示当前连接与关键事件。详细配置在「配置」页，完整日志在「日志」页。",
     currentConnections: "当前连接",
@@ -30,7 +30,7 @@ const text = {
     new: "新建",
     host: "主机",
 
-    // 配置页
+    // Config page
     configTitle: "主机与端口转发",
     configDesc: "每台主机是一个一级目录，点击展开查看其下的端口转发（二级目录）。",
     newHost: "新建主机",
@@ -40,7 +40,7 @@ const text = {
     unpin: "取消置顶",
     pinned: "已置顶",
 
-    // 导入 / 导出
+    // Import / export
     import: "导入",
     export: "导出",
     importFromFile: "从文件导入",
@@ -68,7 +68,7 @@ const text = {
     openInVscode: "通过 VS Code 打开",
     uploadKey: "上传密钥",
 
-    // 通过 VS Code 打开
+    // Open in VS Code
     vscodeHistoryTitle: "通过 VS Code 打开",
     vscodeHistoryDesc: "选择一个历史远端文件夹，或「直连」用 VS Code 默认方式连接，也可指定目录打开。",
     vscodeDirect: "直连（VS Code 默认连接，不打开文件夹）",
@@ -88,7 +88,7 @@ const text = {
     forwardsCount: "条转发",
     runningCount: "运行中",
 
-    // 转发行
+    // Forward row
     connect: "连接",
     disconnect: "断开",
     openWeb: "在浏览器打开",
@@ -101,7 +101,7 @@ const text = {
     running: "运行中",
     stopped: "已停止",
 
-    // 主机字段
+    // Host fields
     name: "名称",
     sshHost: "远程 IP",
     sshHostHint: "远程服务器的 IP 或域名，如 192.168.1.10 或 example.com。",
@@ -115,7 +115,7 @@ const text = {
     proxyJump: "跳板机（ProxyJump）",
     proxyJumpHint: "可不填。通过另一台主机跳转连接，形如 user@jump-host 或 user@jump-host:port；多级跳转用逗号分隔。",
 
-    // 转发字段
+    // Forward fields
     bindHost: "本机地址",
     bindHostHint: "本机监听地址，一般填 127.0.0.1；填 0.0.0.0 可让局域网其他设备访问。",
     bindPort: "本机端口",
@@ -126,16 +126,16 @@ const text = {
     targetPortHint: "远端服务实际监听的端口。",
     keepConnected: "保持连接并自动重连",
 
-    // 主机弹窗
+    // Host dialog
     hostDialogTitle: "主机连接",
     hostDialogDesc: "只填 SSH 连接参数。端口转发在主机展开后单独新建。",
-    // 转发弹窗
+    // Forward dialog
     forwardDialogTitle: "端口转发",
     forwardDialogDesc: "Local 访问远端内网服务，Remote 反向暴露本地服务，Dynamic 创建 SOCKS 代理。",
     save: "保存",
     cancel: "取消",
 
-    // 发送指令弹窗
+    // Send command dialog
     sendCommandTitle: "发送指令",
     sendCommandDesc: "通过 SSH 在该主机上执行一条指令（依赖已配置的免密登录）。",
     commandPlaceholder: "例如：uptime",
@@ -144,20 +144,20 @@ const text = {
     running2: "执行中…",
     output: "输出",
 
-    // 密码弹窗
+    // Password dialog
     passwordDialogTitle: "一次性密码连接",
     passwordDialogDescription: "请输入本次连接使用的 SSH 密码",
     passwordPlaceholder: "SSH 密码",
     passwordOnceNote: "密码不会保存到配置文件。若开启保持连接，密码只会在本次应用运行期间用于自动重连。",
 
-    // 上传密钥弹窗
+    // Upload key dialog
     keyUploadTitle: "上传 SSH 公钥",
     keyUploadDesc: "输入该主机的 SSH 密码，程序会把本机公钥写入远端 authorized_keys。",
     keyUploadNote: "如果未指定私钥文件，程序会使用或生成 %USERPROFILE%\\.ssh\\id_ed25519。密码不会保存。",
     keyUploadNotNeeded: "该主机已可免密直连，无需上传公钥。",
     detectingConnection: "正在检测连接方式…",
 
-    // 指纹变化弹窗
+    // Host key changed dialog
     hostKeyChangedTitle: "远程主机指纹已改变",
     hostKeyChangedWarn:
       "远程主机的密钥与本地记录不一致，连接已被拒绝。这可能是因为服务器被重装或更换，也可能是中间人攻击。请在确认指纹安全后再决定。",
@@ -166,33 +166,33 @@ const text = {
     hostKeyUnavailable: "无法获取远程指纹，请谨慎操作。",
     hostKeyTrust: "信任新密钥并重试",
 
-    // 致命错误弹窗
+    // Critical error dialog
     criticalTitle: "连接出现关键错误",
     criticalDesc: "已停止自动重试。请修复错误后手动重新连接。",
     close: "关闭",
 
-    // 连接失败弹窗（探测阶段：不可达 / IP / 端口 / 网络等）
+    // Connect failed dialog (probe stage: unreachable / IP / port / network, etc.)
     connectFailedTitle: "无法建立连接",
     connectFailedDesc: "请根据下方原因检查主机连接参数后重试。",
 
-    // 未安装 SSH 弹窗
+    // SSH not installed dialog
     sshMissingTitle: "未检测到 OpenSSH 客户端",
     sshMissingDesc: "本程序依赖 Windows 自带的 OpenSSH 客户端（ssh.exe）。是否现在安装？安装需要管理员权限，会从 Windows Update 下载。",
     install: "安装",
     sshInstallStarted: "已开始安装 OpenSSH 客户端。请在弹出的窗口中完成安装，然后重启本程序。",
 
-    // 删除主机二次确认
+    // Delete host confirmation
     confirmDeleteHostTitle: "删除主机",
     confirmDeleteHostDesc: "该主机下的所有端口转发都会一并删除，运行中的连接会先断开。此操作不可撤销。",
 
-    // 日志页
+    // Logs page
     logsTitle: "运行日志",
     logsDesc: "按等级过滤显示，同时写入本地日志目录。等级在「设置」中调整。",
     message: "消息",
     time: "时间",
     level: "等级",
 
-    // 设置页
+    // Settings page
     settingsTitle: "设置",
     settingsDesc: "主题、语言和日志等级会保存在本地，下次启动自动恢复。",
     theme: "主题",

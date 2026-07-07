@@ -60,12 +60,12 @@ export function DashboardPage(props: {
           <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
             {groups.map(({ host, running }) => (
               <div key={host.id} className="flex border-b border-slate-200 last:border-b-0 dark:border-slate-800">
-                {/* 左栏：窄的主机名，纵向居中，高度随右侧端口数自动撑满 */}
+                {/* Left column: narrow host name, vertically centered, height auto-fills based on the right side's port count */}
                 <div className="flex w-44 shrink-0 items-center gap-2 border-r border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
                   <Server size={16} className="shrink-0 text-blue-600 dark:text-blue-300" />
                   <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{host.name}</span>
                 </div>
-                {/* 右栏：该主机运行中的端口列表 */}
+                {/* Right column: list of this host's running ports */}
                 <div className="flex-1 divide-y divide-slate-100 dark:divide-slate-800">
                   {running.map((forward) => (
                     <div key={forward.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">

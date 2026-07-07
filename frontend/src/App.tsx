@@ -53,7 +53,7 @@ const newForward = (): Forward => ({
   bindPort: "",
   targetHost: "127.0.0.1",
   targetPort: "",
-  keepConnected: false,
+  keepConnected: true,
 });
 
 export function App() {
@@ -83,7 +83,7 @@ export function App() {
   const [hostKeyFetching, setHostKeyFetching] = useState(false);
   const [criticalError, setCriticalError] = useState<CriticalErrorPayload | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
-  // 导入/导出：勾选主机弹窗与重复冲突弹窗。
+  // Import/export: host-selection dialog and duplicate-conflict dialog.
   const [selectHosts, setSelectHosts] = useState<{
     mode: "import" | "export-file" | "export-config";
     items: Host[];
@@ -96,7 +96,7 @@ export function App() {
   } | null>(null);
   const [deleteHostTarget, setDeleteHostTarget] = useState<Host | null>(null);
   const [sshMissing, setSshMissing] = useState(false);
-  // VS Code 打开：历史连接弹窗 + 未安装提示。
+  // Open in VS Code: history-connection dialog + not-installed prompt.
   const [vscodeDialog, setVscodeDialog] = useState<{ host: Host; entries: VscodeHistoryEntry[] } | null>(null);
   const [vscodeMissing, setVscodeMissing] = useState<"vscode" | "remoteSsh" | null>(null);
   const shownCriticalErrors = useRef(new Set<string>());
@@ -110,7 +110,7 @@ export function App() {
     document.documentElement.classList.toggle("dark", settings.theme === "dark");
   }, [settings.theme]);
 
-  // 仅在「配置」页且无弹窗时启用空闲计时：3 分钟无操作自动跳回主页。
+  // Idle timer only runs on the Config page with no dialog open: 3 minutes of no activity jumps back to Home.
   useEffect(() => {
     if (page !== "config" || modalOpen) return;
     let timer = 0;
@@ -127,7 +127,7 @@ export function App() {
     };
   }, [page, modalOpen]);
 
-  // 提示信息几分钟后自动消失（也可手动叉掉）；错误信息保留，需手动关闭。
+  // Notices auto-dismiss after a few minutes (or can be closed manually); errors persist until closed manually.
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 3 * 60 * 1000);
@@ -242,7 +242,7 @@ export function App() {
   async function importFromFile() {
     try {
       const parsed = await api.readImportFile();
-      if (parsed.length === 0) return; // 用户取消或空文件
+      if (parsed.length === 0) return; // user canceled or the file was empty
       openSelectHosts("import", parsed);
     } catch (err) {
       setError(String(err));
@@ -344,7 +344,8 @@ export function App() {
       setError("");
       await refreshHosts();
       expand(hostId);
-      // 勾选了保持连接且该转发当前未运行：保存后自动启动（运行中的编辑已由后端重连，跳过避免重复）。
+      // If "keep connected" is checked and this forward isn't currently running, auto-start it after saving
+      // (edits to a running forward are already reconnected by the backend, so skip to avoid double-connecting).
       if (draft.keepConnected) {
         const forward = updatedHost.forwards.find((item) => item.id === draft.id);
         if (forward && forward.status !== "running") await connectForward(updatedHost, forward);
@@ -383,7 +384,7 @@ export function App() {
       await refreshHosts();
     } catch (err) {
       setNotice("");
-      // 探测/连接失败（不可达、IP/端口、网络等）：用弹窗给出具体原因。
+      // Probe/connect failed (unreachable, bad IP/port, network, etc.): show the specific reason in a dialog.
       setConnectError(String(err));
     }
   }

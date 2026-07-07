@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 import { t } from "../i18n";
 import type { Forward, Host, Language } from "../types";
 
-/** 拆分按钮：左侧点开 PowerShell 终端，右侧小箭头展开菜单（含「通过 VS Code 打开」）。 */
+/** Split button: left side opens a PowerShell terminal, the small arrow on the right expands a menu (incl. "Open in VS Code"). */
 function TerminalSplitButton(props: { language: Language; onOpenTerminal: () => void; onOpenVscode: () => void }) {
   const lang = props.language;
   const [open, setOpen] = useState(false);

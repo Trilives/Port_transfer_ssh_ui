@@ -1,0 +1,111 @@
+name: Build
+
+# Multiplatform Tauri build: Windows, Linux, and macOS.
+#
+# - On pull requests and manual runs: builds all three platforms as a smoke test
+#   and uploads the installers as workflow artifacts.
+# - On a version tag (v*): builds all three and publishes them to a GitHub Release.
+#
+# Builds for Windows and Linux. Cross-platform icons live in src-tauri/icons and the
+# frontend build command is OS-agnostic (`npm`, not `npm.cmd`).
+
+on:
+  push:
+    branches: [master]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # needed to create a Release when building a tag
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux: 22.04 provides webkit2gtk-4.1, which Tauri v2 links against.
+          - platform: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Tauri's Linux WebView + bundler system dependencies.
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            file \
+            build-essential \
+            curl \
+            wget
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      # Cache Rust build artifacts, keyed per-OS.
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.platform }}
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      # Builds the frontend (via beforeBuildCommand), compiles the Rust app, and
+      # bundles per-platform installers. On a v* tag it also drafts a Release.
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SSH Port Forwarder __VERSION__' || '' }}
+          releaseBody: "See the assets below to download and install."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # For PR / manual runs (no tag), keep the installers as downloadable artifacts.
+      - name: Upload artifacts
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-port-forwarder-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/**/*
+            src-tauri/target/*/release/bundle/**/*
+          if-no-files-found: warn
+          retention-days: 7

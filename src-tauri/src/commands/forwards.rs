@@ -15,12 +15,12 @@ pub fn save_forward(
     state: State<AppState>,
     app: AppHandle,
 ) -> Result<HostView, String> {
-    // 新建/编辑转发时不校验参数，也不做端口占用检查；这些都留到「连接」运行时判断。
+    // No parameter validation or port-in-use check when creating/editing a forward; both are deferred to connect time.
     if forward.id.trim().is_empty() {
         forward.id = Uuid::new_v4().to_string();
     }
 
-    // 记录旧的隧道关键参数，用于判断运行中的转发是否需要重连。
+    // Record the old tunnel-relevant parameters, to determine whether a running forward needs to reconnect.
     let mut tunnel_changed = false;
     let mut hosts = state.hosts.lock().map_err(lock_error)?;
     let host = hosts
@@ -32,7 +32,9 @@ pub fn save_forward(
             || existing.bind_host.trim() != forward.bind_host.trim()
             || existing.bind_port.trim() != forward.bind_port.trim()
             || existing.target_host.trim() != forward.target_host.trim()
-            || existing.target_port.trim() != forward.target_port.trim();
+            || existing.target_port.trim() != forward.target_port.trim()
+            // keepConnected is captured in the running tunnel's snapshot, so restart to pick up the new value.
+            || existing.keep_connected != forward.keep_connected;
         *existing = forward.clone();
     } else {
         host.forwards.push(forward.clone());
@@ -43,7 +45,7 @@ pub fn save_forward(
     drop(hosts);
     state.add_log("info", format!("[{}/{}] forward saved", host_name, forward.name), Some(&app));
 
-    // 该条转发的 ip/端口/模式变化且正在运行 → 断开并用新参数重连这一条。
+    // This forward's ip/port/mode changed while running → disconnect and reconnect it with the new parameters.
     if tunnel_changed && matches!(state.status_for(&forward.id), TunnelStatus::Running) {
         let host = state.find_host(&host_id)?;
         if let Err(err) = restart_forward(host, forward.clone(), state.inner(), &app) {

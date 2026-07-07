@@ -1,8 +1,8 @@
 [package]
 name = "ssh-port-forwarder"
 version = "0.2.6"
-description = "A modern visual SSH port forwarding manager for Windows."
-authors = ["Codex"]
+description = "A modern visual SSH port forwarding manager for Windows and Linux."
+authors = ["Trlives"]
 edition = "2021"
 
 [lib]

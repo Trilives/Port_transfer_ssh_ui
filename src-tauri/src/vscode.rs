@@ -1,16 +1,16 @@
-//! 通过 VS Code 的 Remote-SSH 打开远端主机：检测安装、读取历史连接、按需写入
-//! `~/.ssh/config` 并用 `code --folder-uri` 打开。
+//! Open a remote host via VS Code's Remote-SSH: detect the install, read connection history, write to
+//! `~/.ssh/config` as needed, and open with `code --folder-uri`.
 //!
-//! 历史连接有两个来源，按 IP 命中后合并去重（同一路径只保留一条）：
-//! 1. **首选** Remote-SSH 扩展自己维护的 `folder.history.v1`，存在 `state.vscdb`（SQLite）的
-//!    `ItemTable` 里 key=`ms-vscode-remote.remote-ssh`。这是最新、最全的「最近打开的远端文件夹」，
-//!    随每次打开即时更新，能避免 `storage.json` 滞后导致看到的是旧记录。
-//! 2. **兜底** `storage.json` → `profileAssociations.workspaces`，其 key 是形如
-//!    `vscode-remote://ssh-remote%2B<authority>/<path>` 的文件夹 URI。
+//! Connection history has two sources, merged and deduplicated by IP match (only one entry kept per path):
+//! 1. **Preferred**: the Remote-SSH extension's own `folder.history.v1`, stored in `state.vscdb` (SQLite)'s
+//!    `ItemTable` under key=`ms-vscode-remote.remote-ssh`. This is the newest and most complete "recently opened
+//!    remote folders" list, updated live on every open, avoiding stale entries from a lagging `storage.json`.
+//! 2. **Fallback**: `storage.json` → `profileAssociations.workspaces`, whose keys are folder URIs shaped like
+//!    `vscode-remote://ssh-remote%2B<authority>/<path>`.
 //!
-//! 两个来源的 authority 同样有两种：裸 IP（按 IP 直连过），或 hex 编码的
-//! `{"hostName":"<别名>"}`（按 ssh config 别名连过）。别名通过本机 `~/.ssh/config` 的
-//! `HostName` 解析回 IP，再与主机 IP 比对。
+//! Both sources' authority comes in two forms: a bare IP (connected directly by IP), or a hex-encoded
+//! `{"hostName":"<alias>"}` (connected via an ssh config alias). The alias is resolved back to an IP via the local
+//! `~/.ssh/config`'s `HostName`, then compared against the host's IP.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -28,37 +28,37 @@ use crate::util::no_window;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VscodeStatus {
-    /// 是否能找到 VS Code 可执行文件。
+    /// Whether the VS Code executable can be found.
     pub installed: bool,
-    /// 是否安装了 Remote-SSH 扩展（ms-vscode-remote.remote-ssh）。
+    /// Whether the Remote-SSH extension (ms-vscode-remote.remote-ssh) is installed.
     pub remote_ssh: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VscodeHistoryEntry {
-    /// 原始文件夹 URI，用于 `code --folder-uri` 原样重开。
+    /// The raw folder URI, used to reopen it as-is via `code --folder-uri`.
     pub uri: String,
-    /// 解码后的远端路径，用于界面展示。
+    /// The decoded remote path, used for display in the UI.
     pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VscodeOpenRootResult {
-    /// 是否本次新写入了 ~/.ssh/config。
+    /// Whether ~/.ssh/config was newly written to this time.
     pub added_to_config: bool,
-    /// 连接所用的 ssh config 别名。
+    /// The ssh config alias used for the connection.
     pub alias: String,
 }
 
-/// 启动 VS Code 的方式：直接调用 `Code.exe`，或回退到 `cmd /c code.cmd`。
+/// How to launch VS Code: call `Code.exe` directly, or fall back to `cmd /c code.cmd`.
 struct CodeLauncher {
     program: PathBuf,
     prefix: Vec<String>,
 }
 
-/// 探测 VS Code 与 Remote-SSH 扩展的安装情况。
+/// Detect whether VS Code and the Remote-SSH extension are installed.
 pub fn status() -> VscodeStatus {
     VscodeStatus {
         installed: code_launcher().is_some(),
@@ -66,8 +66,8 @@ pub fn status() -> VscodeStatus {
     }
 }
 
-/// 读取与指定 IP 对应的所有 VS Code 历史远端文件夹。
-/// 先取 Remote-SSH 扩展最新的 `folder.history.v1`，再用 `storage.json` 兜底，按路径去重。
+/// Read all VS Code history remote folders matching the given IP.
+/// Takes the Remote-SSH extension's latest `folder.history.v1` first, falls back to `storage.json`, and dedups by path.
 pub fn ssh_history_for_ip(ip: &str) -> Vec<VscodeHistoryEntry> {
     let ip = ip.trim();
     if ip.is_empty() {
@@ -77,7 +77,7 @@ pub fn ssh_history_for_ip(ip: &str) -> Vec<VscodeHistoryEntry> {
     let mut out = Vec::new();
     let mut seen_paths = HashSet::new();
 
-    // 1. 首选：Remote-SSH 扩展自维护的最近打开文件夹（最新、最全）。
+    // 1. Preferred: the Remote-SSH extension's own recently-opened folders (newest, most complete).
     for (authority, paths) in remote_ssh_folder_history() {
         if resolve_authority_ip(&authority, &alias_map).as_deref() != Some(ip) {
             continue;
@@ -90,7 +90,7 @@ pub fn ssh_history_for_ip(ip: &str) -> Vec<VscodeHistoryEntry> {
         }
     }
 
-    // 2. 兜底：storage.json 的 profileAssociations.workspaces（可能滞后，补充扩展里没有的条目）。
+    // 2. Fallback: storage.json's profileAssociations.workspaces (may lag, but fills in entries missing from the extension).
     if let Some(workspaces) = read_profile_association_workspaces() {
         for key in workspaces {
             let Some((authority, rest)) = parse_remote_uri(&key) else {
@@ -108,7 +108,7 @@ pub fn ssh_history_for_ip(ip: &str) -> Vec<VscodeHistoryEntry> {
     out
 }
 
-/// 读取 `storage.json` 的 `profileAssociations.workspaces` 的所有 key（文件夹 URI）。
+/// Read all the keys (folder URIs) of `storage.json`'s `profileAssociations.workspaces`.
 fn read_profile_association_workspaces() -> Option<Vec<String>> {
     let path = storage_json_path()?;
     let text = fs::read_to_string(&path).ok()?;
@@ -120,9 +120,9 @@ fn read_profile_association_workspaces() -> Option<Vec<String>> {
     Some(workspaces.keys().cloned().collect())
 }
 
-/// 读取 Remote-SSH 扩展 `folder.history.v1`（authority → 最近打开的远端目录列表）。
-/// 来自 `state.vscdb`（SQLite）的 `ItemTable`，key=`ms-vscode-remote.remote-ssh`。
-/// 任何读取失败（文件缺失、被锁、格式变化）都返回空表，由 storage.json 兜底。
+/// Read the Remote-SSH extension's `folder.history.v1` (authority → list of recently opened remote directories).
+/// Comes from `state.vscdb` (SQLite)'s `ItemTable`, key=`ms-vscode-remote.remote-ssh`.
+/// Any read failure (missing file, locked, format change) returns an empty map, falling back to storage.json.
 fn remote_ssh_folder_history() -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     let Some(value) = read_state_db_item("ms-vscode-remote.remote-ssh") else {
@@ -146,7 +146,7 @@ fn remote_ssh_folder_history() -> HashMap<String, Vec<String>> {
     map
 }
 
-/// 以只读方式从 `state.vscdb` 的 `ItemTable` 取某个 key 的值（JSON 文本）。
+/// Read a key's value (JSON text) from `state.vscdb`'s `ItemTable`, read-only.
 fn read_state_db_item(key: &str) -> Option<String> {
     let path = state_vscdb_path()?;
     if !path.exists() {
@@ -157,17 +157,17 @@ fn read_state_db_item(key: &str) -> Option<String> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
     )
     .ok()?;
-    // VS Code 运行时可能短暂持锁；等一会儿再放弃，失败则由 storage.json 兜底。
+    // VS Code may briefly hold the lock while running; wait a bit before giving up, falling back to storage.json on failure.
     let _ = conn.busy_timeout(Duration::from_millis(800));
     conn.query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |row| {
-        // value 通常是 TEXT；个别版本存为 BLOB，故两种都试。
+        // value is usually TEXT; some versions store it as BLOB, so try both.
         row.get::<_, String>(0)
             .or_else(|_| row.get::<_, Vec<u8>>(0).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
     })
     .ok()
 }
 
-/// 用 `code --folder-uri <uri>` 打开一个历史远端文件夹。
+/// Open a history remote folder with `code --folder-uri <uri>`.
 pub fn open_folder_uri(uri: &str) -> Result<(), String> {
     if !uri.starts_with("vscode-remote://") {
         return Err("Invalid VS Code folder URI.".to_string());
@@ -181,15 +181,15 @@ pub fn open_folder_uri(uri: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 直连：找到（或写入）该 IP 对应的 ssh config 别名，用 VS Code 默认方式打开一个已连接但不带
-/// 文件夹的远端窗口（`code --remote ssh-remote+<别名>`，不带任何历史路径）。
+/// Direct connect: find (or write) the ssh config alias for this IP, then open a connected remote window with no
+/// folder using VS Code's default mode (`code --remote ssh-remote+<alias>`, without any history path).
 pub fn open_direct_for_host(host: &Host) -> Result<VscodeOpenRootResult, String> {
     let (alias, added_to_config) = ensure_alias(host)?;
     open_remote_window(&alias)?;
     Ok(VscodeOpenRootResult { added_to_config, alias })
 }
 
-/// 打开指定的远端目录。绝对路径（以 `/` 开头）原样打开；`~` 或相对路径相对家目录解析。
+/// Open the specified remote directory. Absolute paths (starting with `/`) open as-is; `~` or relative paths resolve against the home directory.
 pub fn open_path_for_host(host: &Host, path: &str) -> Result<VscodeOpenRootResult, String> {
     let path = path.trim();
     if path.is_empty() {
@@ -200,7 +200,7 @@ pub fn open_path_for_host(host: &Host, path: &str) -> Result<VscodeOpenRootResul
     let absolute = if path.starts_with('/') {
         path.to_string()
     } else {
-        // ~ 或相对路径：相对远端家目录解析。
+        // ~ or relative path: resolve against the remote home directory.
         let rel = path.strip_prefix('~').unwrap_or(path).trim_start_matches('/');
         let home = query_remote_home(host)
             .ok_or_else(|| "Cannot resolve the remote home directory. Use an absolute path that starts with /.".to_string())?;
@@ -216,8 +216,8 @@ pub fn open_path_for_host(host: &Host, path: &str) -> Result<VscodeOpenRootResul
     Ok(VscodeOpenRootResult { added_to_config, alias })
 }
 
-/// 找到该主机 IP 对应的 ssh config 别名；没有则以主机名（冲突退回 IP）追加写入 config。
-/// 返回 (别名, 本次是否新写入)。
+/// Find the ssh config alias for this host's IP; if none exists, append one using the host name (falling back to the IP on conflict).
+/// Returns (alias, whether it was newly written this time).
 fn ensure_alias(host: &Host) -> Result<(String, bool), String> {
     let ip = host.ssh_host.trim();
     if ip.is_empty() {
@@ -239,7 +239,7 @@ fn ensure_alias(host: &Host) -> Result<(String, bool), String> {
     }
 }
 
-/// 用一次性 SSH（免密、8s 超时、不弹密码）探测远端 `$HOME`；失败/非绝对路径时返回 None。
+/// Probe the remote `$HOME` with a one-off SSH call (passwordless, 8s timeout, no password prompt); returns None on failure or a non-absolute result.
 fn query_remote_home(host: &Host) -> Option<String> {
     let argv = build_send_command(host, "printf '%s' \"$HOME\"", false).ok()?;
     let mut command = Command::new(&argv[0]);
@@ -257,7 +257,7 @@ fn query_remote_home(host: &Host) -> Option<String> {
     home.starts_with('/').then_some(home)
 }
 
-/// 打开一个已连接但不带文件夹的远端窗口（`code --remote ssh-remote+<authority>`）。
+/// Open a connected remote window with no folder (`code --remote ssh-remote+<authority>`).
 fn open_remote_window(authority: &str) -> Result<(), String> {
     let launcher = code_launcher().ok_or_else(|| "VS Code not found.".to_string())?;
     let mut command = Command::new(&launcher.program);
@@ -268,13 +268,13 @@ fn open_remote_window(authority: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 仅对 folderUri 路径里的空格做最小转义（家目录几乎都是 ASCII，无空格时原样返回）。
+/// Minimally escape only spaces in a folderUri path (home directories are almost always ASCII; returned as-is when there are no spaces).
 fn encode_path(path: &str) -> String {
     path.replace(' ', "%20")
 }
 
-/// 把远端路径百分号编码成 folderUri 里的 path 部分：保留 unreserved 与 `/`，其余按 UTF-8 字节转义。
-/// 用于由 `folder.history.v1` 的裸路径（可能含空格或中文）拼出可直接 `--folder-uri` 打开的 URI。
+/// Percent-encode a remote path into the path portion of a folderUri: keeps unreserved characters and `/`, escapes everything else as UTF-8 bytes.
+/// Used to build a URI directly openable via `--folder-uri` from `folder.history.v1`'s raw path (which may contain spaces or non-ASCII characters).
 fn percent_encode_path(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
     for &byte in path.as_bytes() {
@@ -286,9 +286,9 @@ fn percent_encode_path(path: &str) -> String {
     out
 }
 
-// ---- 内部辅助 ----
+// ---- Internal helpers ----
 
-/// `~/.ssh/config` 中 `别名 -> HostName` 的映射，用于把 VS Code 历史里的别名解析回 IP。
+/// A map of `alias -> HostName` from `~/.ssh/config`, used to resolve aliases in VS Code history back to an IP.
 fn alias_to_ip_map() -> HashMap<String, String> {
     let mut map = HashMap::new();
     if let Ok(path) = ssh_config_path() {
@@ -303,13 +303,13 @@ fn alias_to_ip_map() -> HashMap<String, String> {
     map
 }
 
-/// 为待写入 config 的主机挑一个不与现有条目冲突的别名（优先用主机名，其次用 IP）。
+/// Pick an alias for a host to be written into the config that doesn't conflict with existing entries (prefers the host name, then the IP).
 fn pick_alias(content: &str, host: &Host, ip: &str) -> String {
     let existing: HashSet<String> = parse_ssh_config(content)
         .into_iter()
         .map(|host| host.name)
         .collect();
-    // 别名不能含空白（会被 ssh / VS Code 拆成多个模式），统一替换为下划线。
+    // The alias can't contain whitespace (ssh / VS Code would split it into multiple patterns); replace with underscores.
     let mut candidate = sanitize_alias(host.name.trim());
     if candidate.is_empty() {
         candidate = ip.to_string();
@@ -323,7 +323,7 @@ fn pick_alias(content: &str, host: &Host, ip: &str) -> String {
     format!("{ip}-pf")
 }
 
-/// 拆出 `vscode-remote://ssh-remote(+|%2B)<authority>/<path>` 的 authority 与 path 部分。
+/// Split `vscode-remote://ssh-remote(+|%2B)<authority>/<path>` into its authority and path parts.
 fn parse_remote_uri(uri: &str) -> Option<(String, String)> {
     let rest = uri.strip_prefix("vscode-remote://ssh-remote")?;
     let rest = rest.strip_prefix("%2B").or_else(|| rest.strip_prefix('+'))?;
@@ -334,7 +334,7 @@ fn parse_remote_uri(uri: &str) -> Option<(String, String)> {
     Some((authority, path))
 }
 
-/// 把 authority 解析为目标 IP：hex 的 `{"hostName":..}` → 别名 → config 解析；裸串当作 IP/别名。
+/// Resolve authority to a target IP: hex-encoded `{"hostName":..}` → alias → resolved via config; a bare string is treated as an IP/alias.
 fn resolve_authority_ip(authority: &str, alias_map: &HashMap<String, String>) -> Option<String> {
     if !authority.is_empty()
         && authority.len() % 2 == 0
@@ -369,7 +369,7 @@ fn hex_decode(text: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// 解码 URI 路径中的 %XX 转义（再按 UTF-8 还原），用于界面展示。
+/// Decode %XX escapes in a URI path (then restore as UTF-8), used for display in the UI.
 fn percent_decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -390,23 +390,23 @@ fn percent_decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// VS Code 用户数据目录下的 `storage.json` 路径。
+/// Path to `storage.json` under the VS Code user data directory.
 fn storage_json_path() -> Option<PathBuf> {
     Some(global_storage_dir()?.join("storage.json"))
 }
 
-/// VS Code 用户数据目录下的 `state.vscdb`（SQLite）路径。
+/// Path to `state.vscdb` (SQLite) under the VS Code user data directory.
 fn state_vscdb_path() -> Option<PathBuf> {
     Some(global_storage_dir()?.join("state.vscdb"))
 }
 
-/// `%APPDATA%\Code\User\globalStorage` 目录。
+/// The `%APPDATA%\Code\User\globalStorage` directory.
 fn global_storage_dir() -> Option<PathBuf> {
     let appdata = std::env::var_os("APPDATA")?;
     Some(PathBuf::from(appdata).join("Code").join("User").join("globalStorage"))
 }
 
-/// `~/.vscode/extensions` 下是否存在 Remote-SSH 主扩展目录（排除 remote-ssh-edit）。
+/// Whether the main Remote-SSH extension directory exists under `~/.vscode/extensions` (excludes remote-ssh-edit).
 fn remote_ssh_installed() -> bool {
     let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) else {
         return false;
@@ -418,7 +418,7 @@ fn remote_ssh_installed() -> bool {
     const PREFIX: &str = "ms-vscode-remote.remote-ssh-";
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        // 紧跟前缀的应是版本号数字，借此排除 ms-vscode-remote.remote-ssh-edit。
+        // What follows the prefix should be a version number digit; this excludes ms-vscode-remote.remote-ssh-edit.
         if name.starts_with(PREFIX)
             && name.as_bytes().get(PREFIX.len()).is_some_and(u8::is_ascii_digit)
         {
@@ -428,9 +428,39 @@ fn remote_ssh_installed() -> bool {
     false
 }
 
-/// 定位 VS Code 的启动方式：优先 `Code.exe`（含注册表探测，支持非标准盘符安装），
-/// 回退 `cmd /c code.cmd`。
+/// Unix: resolve the `code` CLI from PATH, then the macOS app bundle's bundled CLI.
+#[cfg(unix)]
+fn unix_code_launcher() -> Option<CodeLauncher> {
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join("code");
+            if candidate.exists() {
+                return Some(CodeLauncher { program: candidate, prefix: Vec::new() });
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let bundled =
+            PathBuf::from("/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code");
+        if bundled.exists() {
+            return Some(CodeLauncher { program: bundled, prefix: Vec::new() });
+        }
+    }
+    None
+}
+
+/// Locate how to launch VS Code: prefer `Code.exe` (including registry probing, so non-standard drive installs work),
+/// falling back to `cmd /c code.cmd`.
 fn code_launcher() -> Option<CodeLauncher> {
+    // On Unix, VS Code ships a `code` CLI on PATH (and at a known location on macOS).
+    #[cfg(unix)]
+    {
+        if let Some(launcher) = unix_code_launcher() {
+            return Some(launcher);
+        }
+    }
+
     let mut candidates: Vec<PathBuf> = Vec::new();
     for var in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(base) = std::env::var_os(var) {
@@ -443,7 +473,7 @@ fn code_launcher() -> Option<CodeLauncher> {
             if dir.join("code.exe").exists() {
                 candidates.push(dir.join("code.exe"));
             }
-            // bin\code(.cmd) 的上级目录即安装根，根下是 Code.exe。
+            // bin\code(.cmd)'s parent directory is the install root, which contains Code.exe.
             if dir.join("code.cmd").exists() || dir.join("code").exists() {
                 if let Some(parent) = dir.parent() {
                     candidates.push(parent.join("Code.exe"));
@@ -451,7 +481,8 @@ fn code_launcher() -> Option<CodeLauncher> {
             }
         }
     }
-    // 注册表探测：不依赖 PATH，覆盖装在任意盘符（如 E:\）的情况。
+    // Registry probing (Windows only): doesn't rely on PATH, covers installs on any drive letter (e.g. E:\).
+    #[cfg(target_os = "windows")]
     if let Some(exe) = find_code_via_registry() {
         candidates.push(exe);
     }
@@ -460,7 +491,7 @@ fn code_launcher() -> Option<CodeLauncher> {
             return Some(CodeLauncher { program: candidate.clone(), prefix: Vec::new() });
         }
     }
-    // 回退：找不到 Code.exe，但 PATH 里有 code.cmd 时，用 cmd /c 调用。
+    // Fallback: Code.exe not found, but code.cmd is on PATH, so invoke it via cmd /c.
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             for name in ["code.cmd", "code.exe"] {
@@ -477,9 +508,10 @@ fn code_launcher() -> Option<CodeLauncher> {
     None
 }
 
-/// 从 Windows 注册表里探测 `Code.exe` 路径：先看 `vscode://` 协议处理器，再看卸载项的 DisplayIcon。
+/// Probe the Windows registry for `Code.exe`'s path: check the `vscode://` protocol handler first, then the uninstall entry's DisplayIcon.
+#[cfg(target_os = "windows")]
 fn find_code_via_registry() -> Option<PathBuf> {
-    // vscode 协议命令：默认值形如 "<盘符>\...\Code.exe" --open-url -- "%1"
+    // vscode protocol command: the default value looks like "<drive>\...\Code.exe" --open-url -- "%1"
     let protocol_keys = [
         "HKEY_CLASSES_ROOT\\vscode\\shell\\open\\command",
         "HKEY_CURRENT_USER\\Software\\Classes\\vscode\\shell\\open\\command",
@@ -489,7 +521,7 @@ fn find_code_via_registry() -> Option<PathBuf> {
             return Some(exe);
         }
     }
-    // 卸载项 DisplayIcon：形如 <盘符>\...\Code.exe,0（用户版 HKCU、系统版 HKLM）。
+    // Uninstall entry DisplayIcon: looks like <drive>\...\Code.exe,0 (user install under HKCU, system install under HKLM).
     let uninstall_keys = [
         "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{771FD6B0-FA20-440A-A002-3B3BAC16DC50}_is1",
         "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1",
@@ -503,7 +535,8 @@ fn find_code_via_registry() -> Option<PathBuf> {
     None
 }
 
-/// 运行 `reg query <args>` 并从输出里抽出存在的 `Code.exe` 路径。
+/// Run `reg query <args>` and extract an existing `Code.exe` path from the output.
+#[cfg(target_os = "windows")]
 fn reg_query_code_exe(args: &[&str]) -> Option<PathBuf> {
     let mut command = Command::new("reg");
     command.arg("query").args(args);
@@ -513,7 +546,8 @@ fn reg_query_code_exe(args: &[&str]) -> Option<PathBuf> {
     extract_code_exe(&text)
 }
 
-/// 从一行 `reg` 输出里抽取以 `Code.exe` 结尾的路径（兼容带引号的协议命令与裸 DisplayIcon）。
+/// Extract a path ending in `Code.exe` from a line of `reg` output (handles both quoted protocol commands and bare DisplayIcon values).
+#[cfg(target_os = "windows")]
 fn extract_code_exe(text: &str) -> Option<PathBuf> {
     for line in text.lines() {
         let lower = line.to_lowercase();
@@ -523,10 +557,10 @@ fn extract_code_exe(text: &str) -> Option<PathBuf> {
         let end = hit + "code.exe".len();
         let prefix = &line[..end];
         let start = if let Some(quote) = prefix.rfind('"') {
-            // 协议命令："<path>\Code.exe" --open-url ...
+            // Protocol command: "<path>\Code.exe" --open-url ...
             quote + 1
         } else if let Some(sz) = lower[..end].rfind("reg_sz") {
-            // DisplayIcon：<path>\Code.exe,0，路径在 REG_SZ 与若干空白之后。
+            // DisplayIcon: <path>\Code.exe,0, with the path following REG_SZ and some whitespace.
             let after = sz + "reg_sz".len();
             after + (line[after..end].len() - line[after..end].trim_start().len())
         } else {

@@ -1,27 +1,33 @@
-//! 根据 ssh stderr 把连接失败归类，区分「主机不可达 / IP 端口错误」与「需要密码/认证失败」，
-//! 避免把所有失败都当成「需要密码」。探测与运行态退出都复用这里的分类。
+//! Classify connection failures from ssh stderr, distinguishing "host unreachable / bad IP-port" from "password
+//! required / auth failed" so not every failure is treated as needing a password. Both probing and runtime exit reuse this classification.
 
-/// 一次 ssh 失败的归类。
+/// The classification of a single ssh failure.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SshFailureKind {
-    /// 远端主机指纹变化（known_hosts 不一致）。
+    /// The remote host's fingerprint changed (mismatch with known_hosts).
     HostKeyChanged,
-    /// 无法解析主机名（SSH 主机/域名填写有误）。
+    /// Could not resolve the host name (SSH host/domain field is wrong).
     ResolveFailed,
-    /// 目标拒绝连接（端口错误或对端未运行 SSH）。
+    /// The target refused the connection (wrong port, or SSH isn't running on the other end).
     ConnectionRefused,
-    /// 连接超时（IP 不可达、网络或防火墙拦截）。
+    /// Connection timed out (IP unreachable, network, or firewall blocking).
     Timeout,
-    /// 网络不可达 / 无法路由到主机。
+    /// Network unreachable / no route to the host.
     NetworkUnreachable,
-    /// 已连到主机但认证未通过（需要密码或密钥认证失败）。
+    /// Connected to the host but authentication failed (password required or key auth failed).
     AuthRequired,
-    /// 无法归类的其他失败。
+    /// Any other failure that couldn't be classified.
     Unknown,
 }
 
 impl SshFailureKind {
-    /// 本地化的简短原因，给用户看。
+    /// Whether this failure needs the user to fix something (auth or host-key), so auto-reconnect must NOT retry.
+    /// Network-layer failures (timeout, unreachable, refused, resolve) and Unknown are transient — safe to retry.
+    pub fn is_fatal(self) -> bool {
+        matches!(self, Self::AuthRequired | Self::HostKeyChanged)
+    }
+
+    /// A short, localized reason shown to the user.
     pub fn reason(self, zh: bool) -> &'static str {
         match self {
             Self::HostKeyChanged => {
@@ -77,7 +83,7 @@ impl SshFailureKind {
     }
 }
 
-/// 按 ssh stderr 内容归类失败原因。网络层问题优先于认证，避免把不可达当成「需要密码」。
+/// Classify the failure reason from ssh stderr content. Network-layer issues take priority over auth, so unreachable isn't mistaken for "password required".
 pub fn classify_ssh_failure(stderr: &str) -> SshFailureKind {
     let lower = stderr.to_lowercase();
 
@@ -107,7 +113,7 @@ pub fn classify_ssh_failure(stderr: &str) -> SshFailureKind {
         return SshFailureKind::NetworkUnreachable;
     }
 
-    // 已连上主机但免密认证不可用 / 认证失败 → 需要密码。
+    // Connected to the host but passwordless auth isn't available / auth failed → password required.
     if lower.contains("permission denied")
         || lower.contains("publickey")
         || lower.contains("no supported authentication")
@@ -122,12 +128,33 @@ pub fn classify_ssh_failure(stderr: &str) -> SshFailureKind {
     SshFailureKind::Unknown
 }
 
-/// 把「原因 + 原始 stderr 明细」拼成给用户展示的多行文本。
+/// Combine "reason + raw stderr detail" into a multi-line message for display to the user.
 pub fn format_failure(reason: &str, detail: &str) -> String {
     let detail = detail.trim();
     if detail.is_empty() {
         reason.to_string()
     } else {
         format!("{reason}\n\n{detail}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_and_host_key_are_fatal() {
+        assert!(classify_ssh_failure("Permission denied (publickey,password).").is_fatal());
+        assert!(classify_ssh_failure("Host key verification failed.").is_fatal());
+    }
+
+    #[test]
+    fn network_failures_are_transient() {
+        assert!(!classify_ssh_failure("ssh: connect to host x port 22: Connection timed out").is_fatal());
+        assert!(!classify_ssh_failure("Network is unreachable").is_fatal());
+        assert!(!classify_ssh_failure("connect to host x port 22: Connection refused").is_fatal());
+        // A bare mid-session drop with no recognizable reason must be retried, not treated as fatal.
+        assert!(!classify_ssh_failure("client_loop: send disconnect: Broken pipe").is_fatal());
+        assert!(!SshFailureKind::Unknown.is_fatal());
     }
 }

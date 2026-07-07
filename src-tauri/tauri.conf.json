@@ -4,9 +4,9 @@
   "version": "0.2.6",
   "identifier": "com.codex.ssh-port-forwarder",
   "build": {
-    "beforeDevCommand": "npm.cmd --prefix frontend run dev",
+    "beforeDevCommand": "npm --prefix frontend run dev",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeBuildCommand": "npm.cmd --prefix frontend run build",
+    "beforeBuildCommand": "npm --prefix frontend run build",
     "frontendDist": "../frontend/dist"
   },
   "app": {
@@ -20,12 +20,18 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": []
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }

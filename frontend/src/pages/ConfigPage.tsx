@@ -6,7 +6,7 @@ import { HostCard } from "../components/HostCard";
 import { t } from "../i18n";
 import type { Forward, Host, Language } from "../types";
 
-/** 小型下拉菜单：点击按钮展开，点击菜单项或外部关闭。 */
+/** Small dropdown menu: click the button to expand, click a menu item or outside to close. */
 function Dropdown(props: {
   label: string;
   icon: typeof Download;

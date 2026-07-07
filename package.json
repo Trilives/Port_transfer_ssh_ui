@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "dev": "npm.cmd --prefix frontend run dev",
-    "build": "npm.cmd --prefix frontend run build",
-    "tauri:dev": "frontend\\node_modules\\.bin\\tauri.cmd dev",
-    "tauri:build": "frontend\\node_modules\\.bin\\tauri.cmd build"
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "tauri:dev": "npm --prefix frontend run tauri:dev",
+    "tauri:build": "npm --prefix frontend run tauri:build"
   }
 }

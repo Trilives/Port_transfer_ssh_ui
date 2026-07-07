@@ -1,7 +1,7 @@
 use crate::model::{Forward, Host, TunnelMode};
 use crate::util::empty_default;
 
-/// `user@host` 或仅 `host`（未填用户时）。
+/// `user@host`, or just `host` if no user is set.
 pub fn destination(host: &Host) -> String {
     if host.ssh_user.trim().is_empty() {
         host.ssh_host.trim().to_string()
@@ -20,14 +20,14 @@ fn push_identity_and_extra(host: &Host, command: &mut Vec<String>) -> Result<(),
     Ok(())
 }
 
-/// 跳板机：非空时加 `-J <proxyJump>`。需在 destination 之前。
+/// Jump host: adds `-J <proxyJump>` when non-empty. Must come before destination.
 fn push_proxy_jump(host: &Host, command: &mut Vec<String>) {
     if !host.proxy_jump.trim().is_empty() {
         command.extend(["-J".to_string(), host.proxy_jump.trim().to_string()]);
     }
 }
 
-/// 后台端口转发命令：`ssh -N -T … -L/-R/-D … user@host`。
+/// Background port-forward command: `ssh -N -T … -L/-R/-D … user@host`.
 pub fn build_ssh_command(host: &Host, forward: &Forward) -> Result<Vec<String>, String> {
     let mut command = vec![
         "ssh".to_string(),
@@ -75,7 +75,7 @@ pub fn build_ssh_command(host: &Host, forward: &Forward) -> Result<Vec<String>, 
     Ok(command)
 }
 
-/// 探测命令：`BatchMode=yes`，区分免密直连 / 需要密码 / 指纹变化 / 不可达。
+/// Probe command: `BatchMode=yes`, to distinguish passwordless / password-required / fingerprint-changed / unreachable.
 pub fn build_probe_command(host: &Host) -> Result<Vec<String>, String> {
     let mut command = vec![
         "ssh".to_string(),
@@ -98,7 +98,7 @@ pub fn build_probe_command(host: &Host) -> Result<Vec<String>, String> {
     Ok(command)
 }
 
-/// 上传公钥命令（允许交互式输入密码）。
+/// Upload-public-key command (allows interactive password entry).
 pub fn build_key_upload_command(host: &Host) -> Result<Vec<String>, String> {
     let mut command = vec![
         "ssh".to_string(),
@@ -122,8 +122,8 @@ pub fn build_key_upload_command(host: &Host) -> Result<Vec<String>, String> {
     Ok(command)
 }
 
-/// 发送一次性指令命令。`with_password=false` 时用 `BatchMode=yes` 依赖免密登录；
-/// `with_password=true` 时允许密码（配合 askpass 注入）。
+/// Send a one-off command. With `with_password=false`, uses `BatchMode=yes` (relies on passwordless login);
+/// with `with_password=true`, allows a password (paired with askpass injection).
 pub fn build_send_command(
     host: &Host,
     remote_command: &str,
@@ -156,7 +156,7 @@ pub fn build_send_command(
     Ok(command)
 }
 
-/// 交互式终端用的 ssh 参数（不含 `ssh` 本身后续会单独拼装）。
+/// ssh args for the interactive terminal (excludes `ssh` itself, which is assembled separately later).
 pub fn build_terminal_args(host: &Host) -> Result<Vec<String>, String> {
     let mut command = vec![
         "ssh".to_string(),

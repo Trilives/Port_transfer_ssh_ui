@@ -215,7 +215,7 @@ export function SendCommandDialog(props: {
   );
 }
 
-/** 通用一次性密码输入弹窗（层级高于其他弹窗）。 */
+/** Generic one-time password input dialog (stacks above other dialogs). */
 export function InputPasswordDialog(props: {
   language: Language;
   title: string;
