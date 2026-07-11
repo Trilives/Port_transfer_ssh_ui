@@ -11,12 +11,13 @@ use std::{
     },
 };
 use tauri::{AppHandle, Emitter};
+use uuid::Uuid;
 
 use crate::model::{
-    AppSettings, Forward, ForwardView, Host, HostView, LogEntry, TunnelStatus,
+    AppSettings, Forward, ForwardView, HistoryEntry, Host, HostView, LogEntry, TunnelStatus,
 };
-use crate::store::read_json;
-use crate::util::lock_error;
+use crate::store::{read_json, write_json};
+use crate::util::{lock_error, now_millis};
 
 /// A running forward: keeps a snapshot of the parent host and forward, used for auto-reconnect after disconnect.
 pub struct ManagedTunnel {
@@ -45,6 +46,8 @@ pub struct AppState {
     /// key = forward id
     pub tunnels: Mutex<HashMap<String, ManagedTunnel>>,
     pub logs: Mutex<Vec<LogEntry>>,
+    /// Local open-history (ports/VS Code/terminal), persisted to history.json.
+    pub history: Mutex<Vec<HistoryEntry>>,
     pub data_dir: PathBuf,
     /// Monotonic source of `ManagedTunnel::generation` values.
     tunnel_generation: AtomicU64,
@@ -71,6 +74,7 @@ impl AppState {
             settings: Mutex::new(read_json(data_dir.join("settings.json")).unwrap_or_default()),
             tunnels: Mutex::new(HashMap::new()),
             logs: Mutex::new(Vec::new()),
+            history: Mutex::new(read_json(data_dir.join("history.json")).unwrap_or_default()),
             data_dir,
             tunnel_generation: AtomicU64::new(1),
         }
@@ -91,6 +95,54 @@ impl AppState {
 
     pub fn logs_dir(&self) -> PathBuf {
         self.data_dir.join("logs")
+    }
+
+    pub fn history_path(&self) -> PathBuf {
+        self.data_dir.join("history.json")
+    }
+
+    /// Upsert one open-history entry (dedup/bump handled by `history::upsert`) and persist.
+    pub fn record_open(&self, host_id: &str, kind: &str, label: &str, uri: &str, detail: &str) {
+        if let Ok(mut history) = self.history.lock() {
+            crate::history::upsert(
+                &mut history,
+                HistoryEntry {
+                    id: Uuid::new_v4().to_string(),
+                    host_id: host_id.to_string(),
+                    kind: kind.to_string(),
+                    label: label.to_string(),
+                    uri: uri.to_string(),
+                    detail: detail.to_string(),
+                    opened_at: now_millis(),
+                },
+            );
+            let _ = write_json(self.history_path(), &*history);
+        }
+    }
+
+    /// Scan VS Code's own Remote-SSH history for this host's IP and merge any entries we don't already track.
+    pub fn merge_vscode_history(&self, host_id: &str, ip: &str) {
+        let scanned: Vec<(String, String)> = crate::vscode::ssh_history_for_ip(ip)
+            .into_iter()
+            .map(|entry| (entry.uri, entry.path))
+            .collect();
+        if scanned.is_empty() {
+            return;
+        }
+        if let Ok(mut history) = self.history.lock() {
+            crate::history::merge_scanned(&mut history, host_id, &scanned, now_millis(), || {
+                Uuid::new_v4().to_string()
+            });
+            let _ = write_json(self.history_path(), &*history);
+        }
+    }
+
+    /// This host's open-history, most recent first.
+    pub fn history_for_host(&self, host_id: &str) -> Vec<HistoryEntry> {
+        self.history
+            .lock()
+            .map(|history| crate::history::sorted_for_host(&history, host_id))
+            .unwrap_or_default()
     }
 
     pub fn add_log(&self, level: &str, message: impl Into<String>, app: Option<&AppHandle>) {
@@ -136,6 +188,30 @@ impl AppState {
             .lock()
             .map(|settings| settings.language == "zh-CN")
             .unwrap_or(true)
+    }
+
+    /// The configured close-button behavior: `ask` | `minimize` | `exit`.
+    pub fn close_behavior(&self) -> String {
+        self.settings
+            .lock()
+            .map(|settings| settings.close_behavior.clone())
+            .unwrap_or_else(|_| "ask".to_string())
+    }
+
+    /// Number of forwards whose child process is still running.
+    pub fn active_tunnel_count(&self) -> usize {
+        let Ok(mut tunnels) = self.tunnels.lock() else {
+            return 0;
+        };
+        let mut count = 0;
+        for tunnel in tunnels.values_mut() {
+            if let Some(child) = tunnel.child.as_mut() {
+                if child.try_wait().ok().flatten().is_none() {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 
     pub fn status_for(&self, forward_id: &str) -> TunnelStatus {

@@ -9,7 +9,7 @@ pub fn read_json<T: DeserializeOwned>(path: PathBuf) -> Result<T, String> {
         .map_err(|err| err.to_string())
 }
 
-/// Write JSON atomically: serialize to a sibling temp file (0600 on Unix), then rename over the target so a
+/// Write JSON atomically: serialize to a sibling temp file, then rename over the target so a
 /// crash mid-write can never leave a truncated or partially written config behind.
 pub fn write_json<T: Serialize>(path: PathBuf, value: &T) -> Result<(), String> {
     if let Some(parent) = path.parent() {
@@ -19,13 +19,6 @@ pub fn write_json<T: Serialize>(path: PathBuf, value: &T) -> Result<(), String> 
 
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, &contents).map_err(|err| err.to_string())?;
-
-    // Config may hold host/user details — restrict to the owner on Unix.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600));
-    }
 
     match fs::rename(&tmp, &path) {
         Ok(()) => Ok(()),

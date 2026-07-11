@@ -91,6 +91,7 @@ pub fn send_command_with_password(
 pub fn open_terminal(host_id: String, state: State<AppState>, app: AppHandle) -> Result<(), String> {
     let host = state.find_host(&host_id)?;
     open_terminal_window(&host)?;
+    state.record_open(&host.id, "terminal", &host.name, "", "");
     state.add_log("info", format!("[{}] opened terminal", host.name), Some(&app));
     Ok(())
 }

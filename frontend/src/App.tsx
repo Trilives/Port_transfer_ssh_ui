@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { Activity, BookOpen, ScrollText, Server, Settings as SettingsIcon, Terminal } from "lucide-react";
 import { api } from "./api";
 import { cn, forwardWebUrl } from "./lib/utils";
 import { t } from "./i18n";
 import {
+  CloseBehaviorDialog,
   ConfirmDialog,
   ConnectionErrorDialog,
   CriticalErrorDialog,
@@ -14,11 +18,11 @@ import {
   ImportConflictDialog,
   InputPasswordDialog,
   KeyUploadDialog,
+  OpenHistoryDialog,
   PasswordDialog,
   SelectHostsDialog,
   SendCommandDialog,
   SshMissingDialog,
-  VscodeHistoryDialog,
   VscodeMissingDialog,
 } from "./components/dialogs";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -26,11 +30,11 @@ import { ConfigPage } from "./pages/ConfigPage";
 import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { GuidePage } from "./pages/GuidePage";
-import type { AppSettings, CriticalErrorPayload, Forward, Host, LogEntry, LogLevel, VscodeHistoryEntry } from "./types";
+import type { AppSettings, CriticalErrorPayload, Forward, HistoryEntry, Host, LogEntry, LogLevel, UpdateState } from "./types";
 
 type Page = "dashboard" | "config" | "logs" | "settings" | "guide";
 
-const defaultSettings: AppSettings = { theme: "light", language: "zh-CN", logLevel: "info" };
+const defaultSettings: AppSettings = { theme: "light", language: "zh-CN", logLevel: "info", closeBehavior: "ask", autoUpdate: false };
 
 const newHost = (): Host => ({
   id: "",
@@ -96,14 +100,22 @@ export function App() {
   } | null>(null);
   const [deleteHostTarget, setDeleteHostTarget] = useState<Host | null>(null);
   const [sshMissing, setSshMissing] = useState(false);
-  // Open in VS Code: history-connection dialog + not-installed prompt.
-  const [vscodeDialog, setVscodeDialog] = useState<{ host: Host; entries: VscodeHistoryEntry[] } | null>(null);
+  // Open history: combined VS Code / terminal / port history window + VS Code not-installed prompt.
+  const [historyDialog, setHistoryDialog] = useState<{ host: Host; entries: HistoryEntry[] } | null>(null);
   const [vscodeMissing, setVscodeMissing] = useState<"vscode" | "remoteSsh" | null>(null);
+  // Close-button prompt (minimize to tray vs quit); `active` = forwards still running.
+  const [closePrompt, setClosePrompt] = useState<{ active: boolean } | null>(null);
   const shownCriticalErrors = useRef(new Set<string>());
+  // In-app auto-update (Settings page): current version, flow state, and the pending Update handle to install.
+  const [appVersion, setAppVersion] = useState("");
+  const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const pendingUpdate = useRef<Update | null>(null);
+  const didStartupUpdateCheck = useRef(false);
 
   const language = settings.language;
   const modalOpen = Boolean(
-    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || selectHosts || importConflict || deleteHostTarget || sshMissing || vscodeDialog || vscodeMissing,
+    hostDialog || forwardDialog || sendCmd || passwordTarget || keyUploadTarget || hostKeyTarget || criticalError || connectError || selectHosts || importConflict || deleteHostTarget || sshMissing || historyDialog || vscodeMissing || closePrompt,
   );
 
   useEffect(() => {
@@ -146,10 +158,33 @@ export function App() {
     return () => unlisten?.();
   }, []);
 
+  // The backend prevents the window close and asks us to prompt (behavior "ask", or "exit" with forwards running).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<boolean>("close-requested", (event) => {
+      setClosePrompt({ active: event.payload });
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => unlisten?.();
+  }, []);
+
   useEffect(() => {
     void api.checkSsh().then((available) => {
       if (!available) setSshMissing(true);
     });
+  }, []);
+
+  useEffect(() => {
+    void getVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
+  // One startup update check: with auto-update on, install silently; otherwise surface a banner on Home.
+  useEffect(() => {
+    if (didStartupUpdateCheck.current) return;
+    didStartupUpdateCheck.current = true;
+    void startupUpdateCheck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -530,7 +565,7 @@ export function App() {
     }
   }
 
-  // ---- Open in VS Code (Remote-SSH) ----
+  // ---- Open history (VS Code / terminal / port) ----
   async function openVscode(host: Host) {
     setError("");
     try {
@@ -543,19 +578,27 @@ export function App() {
         setVscodeMissing("remoteSsh");
         return;
       }
-      const entries = await api.vscodeSshHistory(host.id);
-      setVscodeDialog({ host, entries });
+      // Loading history also rescans VS Code's own history and merges anything new (backend side).
+      const entries = await api.listHistory(host.id);
+      setHistoryDialog({ host, entries });
     } catch (err) {
       setError(String(err));
     }
   }
 
-  async function openVscodeEntry(uri: string) {
+  async function openHistoryEntry(entry: HistoryEntry) {
+    if (!historyDialog) return;
+    const hostId = historyDialog.host.id;
+    setHistoryDialog(null);
     try {
-      await api.vscodeOpen(uri);
-      setVscodeDialog(null);
+      if (entry.kind === "vscode") {
+        await api.vscodeOpen(entry.uri, hostId, entry.label);
+      } else if (entry.kind === "terminal") {
+        await api.openTerminal(hostId);
+      } else if (entry.kind === "port" && entry.detail) {
+        await api.openUrl(entry.detail);
+      }
     } catch (err) {
-      setVscodeDialog(null);
       setError(String(err));
     }
   }
@@ -563,12 +606,12 @@ export function App() {
   async function openVscodeDirect(host: Host) {
     try {
       const result = await api.vscodeOpenDirect(host.id);
-      setVscodeDialog(null);
+      setHistoryDialog(null);
       if (result.addedToConfig) {
         setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
       }
     } catch (err) {
-      setVscodeDialog(null);
+      setHistoryDialog(null);
       setError(String(err));
     }
   }
@@ -577,14 +620,27 @@ export function App() {
     if (!path.trim()) return;
     try {
       const result = await api.vscodeOpenPath(host.id, path.trim());
-      setVscodeDialog(null);
+      setHistoryDialog(null);
       if (result.addedToConfig) {
         setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
       }
     } catch (err) {
-      setVscodeDialog(null);
+      setHistoryDialog(null);
       setError(String(err));
     }
+  }
+
+  // ---- Close-button prompt (minimize to tray vs quit) ----
+  async function minimizeToTray(remember: boolean) {
+    setClosePrompt(null);
+    if (remember) await updateSettings({ closeBehavior: "minimize" });
+    await api.hideToTray();
+  }
+
+  async function exitApp(remember: boolean) {
+    if (remember) await updateSettings({ closeBehavior: "exit" });
+    setClosePrompt(null);
+    await api.quitApp();
   }
 
   async function installSsh() {
@@ -594,6 +650,56 @@ export function App() {
       setNotice(t(language, "sshInstallStarted"));
     } catch (err) {
       setError(String(err));
+    }
+  }
+
+  // ---- In-app auto-update ----
+  // Runs once at startup. Reads the freshest autoUpdate setting (state may still be default at mount),
+  // then either installs automatically or leaves an "available" update for the Home banner / Settings.
+  async function startupUpdateCheck() {
+    try {
+      const found = await check();
+      if (!found) return;
+      pendingUpdate.current = found;
+      const auto = (await api.getSettings()).autoUpdate;
+      if (auto) {
+        await installUpdate();
+      } else {
+        setUpdateDismissed(false);
+        setUpdate({ status: "available", version: found.version, notes: found.body ?? "" });
+      }
+    } catch {
+      /* Silent on startup; the user can still check manually in Settings. */
+    }
+  }
+
+  async function checkForUpdate() {
+    setUpdate({ status: "checking" });
+    try {
+      const found = await check();
+      if (found) {
+        pendingUpdate.current = found;
+        setUpdateDismissed(false);
+        setUpdate({ status: "available", version: found.version, notes: found.body ?? "" });
+      } else {
+        pendingUpdate.current = null;
+        setUpdate({ status: "uptodate" });
+      }
+    } catch (err) {
+      setUpdate({ status: "error", error: String(err) });
+    }
+  }
+
+  async function installUpdate() {
+    const found = pendingUpdate.current;
+    if (!found) return;
+    setUpdate({ status: "downloading", version: found.version });
+    try {
+      await found.downloadAndInstall();
+      setUpdate({ status: "restarting", version: found.version });
+      await relaunch();
+    } catch (err) {
+      setUpdate({ status: "error", error: String(err) });
     }
   }
 
@@ -648,6 +754,17 @@ export function App() {
               <button onClick={() => setNotice("")} className="shrink-0 text-emerald-400 hover:text-emerald-600">✕</button>
             </div>
           )}
+          {page === "dashboard" && update.status === "available" && !updateDismissed && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-950 dark:bg-blue-950/40 dark:text-blue-200">
+              <span className="whitespace-pre-wrap">{t(language, "updateBannerText").replace("{version}", update.version ?? "")}</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <button onClick={installUpdate} className="rounded-lg bg-blue-600 px-3 py-1.5 font-medium text-white transition hover:bg-blue-500">
+                  {t(language, "updateNow")}
+                </button>
+                <button onClick={() => setUpdateDismissed(true)} className="text-blue-400 hover:text-blue-600">✕</button>
+              </div>
+            </div>
+          )}
           <div className="animate-[fadeIn_220ms_ease-out]">
             {page === "dashboard" && (
               <DashboardPage
@@ -695,7 +812,16 @@ export function App() {
               />
             )}
             {page === "logs" && <LogsPage language={language} logs={logs} />}
-            {page === "settings" && <SettingsPage settings={settings} setSettings={updateSettings} />}
+            {page === "settings" && (
+              <SettingsPage
+                settings={settings}
+                setSettings={updateSettings}
+                appVersion={appVersion}
+                update={update}
+                onCheckUpdate={checkForUpdate}
+                onInstallUpdate={installUpdate}
+              />
+            )}
             {page === "guide" && <GuidePage language={language} />}
           </div>
         </section>
@@ -833,19 +959,28 @@ export function App() {
       {sshMissing && (
         <SshMissingDialog language={language} onCancel={() => setSshMissing(false)} onInstall={installSsh} />
       )}
-      {vscodeDialog && (
-        <VscodeHistoryDialog
+      {historyDialog && (
+        <OpenHistoryDialog
           language={language}
-          hostName={vscodeDialog.host.name}
-          entries={vscodeDialog.entries}
-          onOpenEntry={openVscodeEntry}
-          onOpenDirect={() => openVscodeDirect(vscodeDialog.host)}
-          onOpenPath={(path) => openVscodePath(vscodeDialog.host, path)}
-          onCancel={() => setVscodeDialog(null)}
+          hostName={historyDialog.host.name}
+          entries={historyDialog.entries}
+          onOpenEntry={openHistoryEntry}
+          onOpenDirect={() => openVscodeDirect(historyDialog.host)}
+          onOpenPath={(path) => openVscodePath(historyDialog.host, path)}
+          onCancel={() => setHistoryDialog(null)}
         />
       )}
       {vscodeMissing && (
         <VscodeMissingDialog language={language} kind={vscodeMissing} onClose={() => setVscodeMissing(null)} />
+      )}
+      {closePrompt && (
+        <CloseBehaviorDialog
+          language={language}
+          active={closePrompt.active}
+          onMinimize={minimizeToTray}
+          onExit={exitApp}
+          onCancel={() => setClosePrompt(null)}
+        />
       )}
     </main>
   );

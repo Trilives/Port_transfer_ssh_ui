@@ -7,7 +7,7 @@ export const languageLabels: Record<Language, string> = {
 
 const text = {
   "zh-CN": {
-    title: "SSH 端口转发",
+    title: "SSHDeck",
     subtitle: "以主机为中心，管理 SSH 连接、端口转发、终端与日志。",
 
     // Navigation
@@ -204,9 +204,47 @@ const text = {
     logInfo: "信息",
     logWarning: "警告",
     logError: "错误",
+    closeBehavior: "关闭按钮行为",
+    closeBehaviorAsk: "每次询问",
+    closeBehaviorMinimize: "最小化到系统托盘",
+    closeBehaviorExit: "退出程序",
+
+    // Auto-update
+    updates: "软件更新",
+    currentVersion: "当前版本",
+    autoUpdate: "自动更新",
+    autoUpdateOn: "开启",
+    autoUpdateOff: "关闭",
+    checkUpdate: "检查更新",
+    checkingUpdate: "正在检查更新…",
+    upToDate: "已是最新版本。",
+    updateAvailable: "发现新版本 {version}",
+    releaseNotes: "更新说明",
+    downloadInstall: "下载并安装",
+    updateNow: "立即更新",
+    downloadingUpdate: "正在下载并安装更新…",
+    restartingUpdate: "下载完成，正在重启应用…",
+    updateFailed: "检查更新失败：{error}",
+    updateBannerText: "发现新版本 {version}，可前往「设置」查看更新说明。",
+
+    // Open history (VS Code / 终端 / 端口)
+    historyTitle: "打开历史",
+    historyDesc: "该主机最近打开的端口、VS Code 远端文件夹与终端，按最近使用排序。也可直连或指定目录打开。",
+    historyEmpty: "暂无打开历史。打开端口、终端或 VS Code 后会记录在此。",
+    historyKind_vscode: "VS Code",
+    historyKind_terminal: "终端",
+    historyKind_port: "端口",
+
+    // Close-to-tray prompt
+    closePromptTitle: "关闭窗口",
+    closePromptDesc: "要退出程序，还是最小化到系统托盘继续在后台运行？",
+    closePromptActiveDesc: "仍有端口转发正在运行。退出会断开所有连接；也可最小化到系统托盘让其继续运行。",
+    closePromptRemember: "记住我的选择作为默认行为",
+    closePromptMinimize: "最小化到托盘",
+    closePromptExit: "退出程序",
   },
   "en-US": {
-    title: "SSH Port Forwarder",
+    title: "SSHDeck",
     subtitle: "Host-centric management of SSH connections, port forwards, terminals, and logs.",
 
     dashboard: "Home",
@@ -386,6 +424,44 @@ const text = {
     logInfo: "Info",
     logWarning: "Warning",
     logError: "Error",
+    closeBehavior: "Close button behavior",
+    closeBehaviorAsk: "Ask every time",
+    closeBehaviorMinimize: "Minimize to tray",
+    closeBehaviorExit: "Quit the app",
+
+    // Auto-update
+    updates: "Software Update",
+    currentVersion: "Current version",
+    autoUpdate: "Automatic updates",
+    autoUpdateOn: "Enabled",
+    autoUpdateOff: "Disabled",
+    checkUpdate: "Check for updates",
+    checkingUpdate: "Checking for updates…",
+    upToDate: "You're on the latest version.",
+    updateAvailable: "New version {version} available",
+    releaseNotes: "Release notes",
+    downloadInstall: "Download & install",
+    updateNow: "Update now",
+    downloadingUpdate: "Downloading and installing update…",
+    restartingUpdate: "Downloaded. Restarting the app…",
+    updateFailed: "Update check failed: {error}",
+    updateBannerText: "New version {version} available — see Settings for release notes.",
+
+    // Open history (VS Code / terminal / port)
+    historyTitle: "Open History",
+    historyDesc: "Recently opened ports, VS Code remote folders, and terminals for this host, most recent first. You can also connect directly or open a specific directory.",
+    historyEmpty: "No open history yet. Opening a port, terminal, or VS Code folder records it here.",
+    historyKind_vscode: "VS Code",
+    historyKind_terminal: "Terminal",
+    historyKind_port: "Port",
+
+    // Close-to-tray prompt
+    closePromptTitle: "Close Window",
+    closePromptDesc: "Quit the app, or minimize to the system tray and keep running in the background?",
+    closePromptActiveDesc: "Port forwards are still running. Quitting disconnects them all; you can minimize to the tray to keep them running.",
+    closePromptRemember: "Remember my choice as the default",
+    closePromptMinimize: "Minimize to tray",
+    closePromptExit: "Quit",
   },
 };
 

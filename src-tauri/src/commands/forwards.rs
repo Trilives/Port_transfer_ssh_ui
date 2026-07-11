@@ -1,12 +1,29 @@
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use crate::model::{Forward, HostView, TunnelStatus};
+use crate::model::{Forward, Host, HostView, TunnelStatus};
 use crate::ssh::process::{restart_forward, start_tunnel, stop_tunnel};
 use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
 use crate::validate::validate_forward;
+
+/// Record a just-opened port in the local history (with a browser URL for local/dynamic forwards so it can be
+/// reopened), then rescan VS Code's history — opening a port is one of the moments we refresh it.
+fn record_port_open(state: &AppState, host: &Host, forward: &Forward) {
+    let view = state.forward_view(forward.clone());
+    let port = view.forward.bind_port.trim().to_string();
+    let detail = if forward.binds_local_port() && !port.is_empty() {
+        let bind = forward.bind_host.trim();
+        let display_host = if bind.is_empty() || bind == "0.0.0.0" { "127.0.0.1" } else { bind };
+        format!("http://{display_host}:{port}")
+    } else {
+        String::new()
+    };
+    let label = format!("{} · {}", forward.name, view.bind_display);
+    state.record_open(&host.id, "port", &label, "", &detail);
+    state.merge_vscode_history(&host.id, &host.ssh_host);
+}
 
 #[tauri::command]
 pub fn save_forward(
@@ -101,7 +118,8 @@ pub fn connect_forward(
         return Ok(state.host_view(host));
     }
     validate_forward(&forward)?;
-    start_tunnel(host, forward, state.inner(), app, None)?;
+    start_tunnel(host.clone(), forward.clone(), state.inner(), app, None)?;
+    record_port_open(state.inner(), &host, &forward);
     Ok(state.host_view(state.find_host(&host_id)?))
 }
 
@@ -121,7 +139,8 @@ pub fn connect_forward_with_password(
         return Ok(state.host_view(host));
     }
     validate_forward(&forward)?;
-    start_tunnel(host, forward, state.inner(), app, Some(password))?;
+    start_tunnel(host.clone(), forward.clone(), state.inner(), app, Some(password))?;
+    record_port_open(state.inner(), &host, &forward);
     Ok(state.host_view(state.find_host(&host_id)?))
 }
 

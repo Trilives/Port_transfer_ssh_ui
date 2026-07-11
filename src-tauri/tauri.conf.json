@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SSH Port Forwarder",
-  "version": "0.2.6",
+  "productName": "SSHDeck",
+  "version": "0.3.0-beta.1",
   "identifier": "com.codex.ssh-port-forwarder",
   "build": {
-    "beforeDevCommand": "npm --prefix frontend run dev",
+    "beforeDevCommand": "npm.cmd --prefix frontend run dev",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeBuildCommand": "npm --prefix frontend run build",
+    "beforeBuildCommand": "npm.cmd --prefix frontend run build",
     "frontendDist": "../frontend/dist"
   },
   "app": {
     "windows": [
       {
-        "title": "SSH Port Forwarder",
+        "title": "SSHDeck",
         "width": 1180,
         "height": 760,
         "minWidth": 980,
@@ -23,15 +23,29 @@
       "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Trilives/Port_transfer_ssh_ui/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE2NzJFRTU0RUU2NTJGN0QKUldSOUwyWHVWTzV5cGdnalN2dkFwcVhWTGRnTEsxemM0U3R5cHg2bFJ1eEc4M1JKMXhnOVF1YTAK"
+    }
+  },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": ["SimpChinese", "English"]
+      }
+    }
   }
 }

@@ -50,6 +50,8 @@ pub struct VscodeOpenRootResult {
     pub added_to_config: bool,
     /// The ssh config alias used for the connection.
     pub alias: String,
+    /// The folder URI opened (for a specific path), so it can be recorded in history and reopened. Empty for a direct connect.
+    pub uri: String,
 }
 
 /// How to launch VS Code: call `Code.exe` directly, or fall back to `cmd /c code.cmd`.
@@ -186,7 +188,7 @@ pub fn open_folder_uri(uri: &str) -> Result<(), String> {
 pub fn open_direct_for_host(host: &Host) -> Result<VscodeOpenRootResult, String> {
     let (alias, added_to_config) = ensure_alias(host)?;
     open_remote_window(&alias)?;
-    Ok(VscodeOpenRootResult { added_to_config, alias })
+    Ok(VscodeOpenRootResult { added_to_config, alias, uri: String::new() })
 }
 
 /// Open the specified remote directory. Absolute paths (starting with `/`) open as-is; `~` or relative paths resolve against the home directory.
@@ -213,7 +215,7 @@ pub fn open_path_for_host(host: &Host, path: &str) -> Result<VscodeOpenRootResul
 
     let uri = format!("vscode-remote://ssh-remote+{}{}", alias, encode_path(&absolute));
     open_folder_uri(&uri)?;
-    Ok(VscodeOpenRootResult { added_to_config, alias })
+    Ok(VscodeOpenRootResult { added_to_config, alias, uri })
 }
 
 /// Find the ssh config alias for this host's IP; if none exists, append one using the host name (falling back to the IP on conflict).
@@ -428,39 +430,9 @@ fn remote_ssh_installed() -> bool {
     false
 }
 
-/// Unix: resolve the `code` CLI from PATH, then the macOS app bundle's bundled CLI.
-#[cfg(unix)]
-fn unix_code_launcher() -> Option<CodeLauncher> {
-    if let Some(path) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path) {
-            let candidate = dir.join("code");
-            if candidate.exists() {
-                return Some(CodeLauncher { program: candidate, prefix: Vec::new() });
-            }
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let bundled =
-            PathBuf::from("/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code");
-        if bundled.exists() {
-            return Some(CodeLauncher { program: bundled, prefix: Vec::new() });
-        }
-    }
-    None
-}
-
 /// Locate how to launch VS Code: prefer `Code.exe` (including registry probing, so non-standard drive installs work),
 /// falling back to `cmd /c code.cmd`.
 fn code_launcher() -> Option<CodeLauncher> {
-    // On Unix, VS Code ships a `code` CLI on PATH (and at a known location on macOS).
-    #[cfg(unix)]
-    {
-        if let Some(launcher) = unix_code_launcher() {
-            return Some(launcher);
-        }
-    }
-
     let mut candidates: Vec<PathBuf> = Vec::new();
     for var in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(base) = std::env::var_os(var) {
@@ -481,8 +453,7 @@ fn code_launcher() -> Option<CodeLauncher> {
             }
         }
     }
-    // Registry probing (Windows only): doesn't rely on PATH, covers installs on any drive letter (e.g. E:\).
-    #[cfg(target_os = "windows")]
+    // Registry probing: doesn't rely on PATH, covers installs on any drive letter (e.g. E:\).
     if let Some(exe) = find_code_via_registry() {
         candidates.push(exe);
     }
@@ -509,7 +480,6 @@ fn code_launcher() -> Option<CodeLauncher> {
 }
 
 /// Probe the Windows registry for `Code.exe`'s path: check the `vscode://` protocol handler first, then the uninstall entry's DisplayIcon.
-#[cfg(target_os = "windows")]
 fn find_code_via_registry() -> Option<PathBuf> {
     // vscode protocol command: the default value looks like "<drive>\...\Code.exe" --open-url -- "%1"
     let protocol_keys = [
@@ -536,7 +506,6 @@ fn find_code_via_registry() -> Option<PathBuf> {
 }
 
 /// Run `reg query <args>` and extract an existing `Code.exe` path from the output.
-#[cfg(target_os = "windows")]
 fn reg_query_code_exe(args: &[&str]) -> Option<PathBuf> {
     let mut command = Command::new("reg");
     command.arg("query").args(args);
@@ -547,7 +516,6 @@ fn reg_query_code_exe(args: &[&str]) -> Option<PathBuf> {
 }
 
 /// Extract a path ending in `Code.exe` from a line of `reg` output (handles both quoted protocol commands and bare DisplayIcon values).
-#[cfg(target_os = "windows")]
 fn extract_code_exe(text: &str) -> Option<PathBuf> {
     for line in text.lines() {
         let lower = line.to_lowercase();

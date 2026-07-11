@@ -74,8 +74,8 @@ pub fn start_tunnel(
         process
             .env("SSH_ASKPASS", helper)
             .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("DISPLAY", "ssh-port-forwarder")
-            .env("SSH_PORT_FORWARDER_PASSWORD", password_value);
+            .env("DISPLAY", "sshdeck")
+            .env("SSHDECK_PASSWORD", password_value);
     }
     let child = process.spawn().map_err(|err| err.to_string())?;
 
@@ -256,12 +256,8 @@ fn watch_tunnel(forward_id: String, generation: u64, data_dir: PathBuf, app: App
 pub fn prepare_askpass_helper(data_dir: &PathBuf) -> Result<PathBuf, String> {
     let helper_dir = data_dir.join("helpers");
     fs::create_dir_all(&helper_dir).map_err(|err| err.to_string())?;
-    // Keep "askpass" in the stem (main.rs detects the mode by filename) and the platform's
-    // executable suffix (".exe" on Windows, empty elsewhere).
-    let helper = helper_dir.join(format!(
-        "ssh-port-forwarder-askpass{}",
-        std::env::consts::EXE_SUFFIX
-    ));
+    // Keep "askpass" in the stem (main.rs detects the mode by filename).
+    let helper = helper_dir.join("sshdeck-askpass.exe");
     let current_exe = std::env::current_exe().map_err(|err| err.to_string())?;
     let should_copy = match (fs::metadata(&current_exe), fs::metadata(&helper)) {
         (Ok(current), Ok(existing)) => current.len() != existing.len(),
@@ -270,14 +266,6 @@ pub fn prepare_askpass_helper(data_dir: &PathBuf) -> Result<PathBuf, String> {
     };
     if should_copy {
         fs::copy(&current_exe, &helper).map_err(|err| err.to_string())?;
-        // On Unix the copy isn't executable by default; ssh must be able to run it as SSH_ASKPASS.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&helper).map_err(|err| err.to_string())?.permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&helper, perms).map_err(|err| err.to_string())?;
-        }
     }
     Ok(helper)
 }
@@ -287,8 +275,8 @@ pub fn apply_askpass(process: &mut Command, helper: PathBuf, password: &str) {
     process
         .env("SSH_ASKPASS", helper)
         .env("SSH_ASKPASS_REQUIRE", "force")
-        .env("DISPLAY", "ssh-port-forwarder")
-        .env("SSH_PORT_FORWARDER_PASSWORD", password);
+        .env("DISPLAY", "sshdeck")
+        .env("SSHDECK_PASSWORD", password);
 }
 
 /// Write data to a child process's stdin.

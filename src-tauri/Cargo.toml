@@ -1,12 +1,12 @@
 [package]
-name = "ssh-port-forwarder"
-version = "0.2.6"
-description = "A modern visual SSH port forwarding manager for Windows and Linux."
+name = "sshdeck"
+version = "0.3.0-beta.1"
+description = "A modern visual SSH port forwarding manager for Windows."
 authors = ["Trlives"]
 edition = "2021"
 
 [lib]
-name = "ssh_port_forwarder_lib"
+name = "sshdeck_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -20,5 +20,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 shell-words = "1"
-tauri = { version = "2.0", features = [] }
+tauri = { version = "2.0", features = ["tray-icon"] }
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 uuid = { version = "1", features = ["v4", "serde"] }

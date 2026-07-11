@@ -1,16 +1,11 @@
 use std::process::Command;
 
-/// Apply `CREATE_NO_WINDOW` on Windows so spawned ssh/helper processes do not
-/// pop up a console window. No-op on other platforms.
-#[cfg(target_os = "windows")]
+/// Apply `CREATE_NO_WINDOW` so spawned ssh/helper processes do not pop up a console window.
 pub fn no_window(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     command.creation_flags(CREATE_NO_WINDOW);
 }
-
-#[cfg(not(target_os = "windows"))]
-pub fn no_window(_command: &mut Command) {}
 
 /// Trimmed value, or the fallback when the trimmed value is empty.
 pub fn empty_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {

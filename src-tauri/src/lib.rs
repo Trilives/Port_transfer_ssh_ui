@@ -1,4 +1,5 @@
 mod commands;
+mod history;
 mod model;
 mod portcheck;
 mod ssh;
@@ -10,13 +11,23 @@ mod util;
 mod validate;
 mod vscode;
 
-use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 
+use crate::commands::window::show_main_window;
 use crate::ssh::process::cleanup_tunnels;
 use crate::state::AppState;
 
 pub fn run() {
     tauri::Builder::default()
+        // Must be the first plugin: a second launch focuses the running window instead of starting anew.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            show_main_window(app);
+        }))
+        // In-app auto-update: `updater` checks/downloads/installs signed releases; `process` relaunches after install.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::hosts::list_hosts,
@@ -49,16 +60,24 @@ pub fn run() {
             commands::system::check_ssh,
             commands::system::install_openssh,
             commands::vscode::vscode_status,
-            commands::vscode::vscode_ssh_history,
             commands::vscode::vscode_open,
             commands::vscode::vscode_open_direct,
-            commands::vscode::vscode_open_path
+            commands::vscode::vscode_open_path,
+            commands::history::list_history,
+            commands::window::hide_to_tray,
+            commands::window::quit_app
         ])
         .setup(|app| {
             let state = app.state::<AppState>();
             let handle = app.handle().clone();
             state.add_log("info", "application started", Some(&handle));
+            build_tray(app)?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                handle_close_requested(window, api);
+            }
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -68,4 +87,65 @@ pub fn run() {
                 cleanup_tunnels(state.inner(), Some(app_handle));
             }
         });
+}
+
+/// Decide what the window's close button does. `minimize` hides to tray; `exit` quits only when nothing is
+/// running; otherwise (`ask`, or `exit` while forwards are live) the close is prevented and the UI is asked to prompt.
+fn handle_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    let app = window.app_handle();
+    let state = app.state::<AppState>();
+    let behavior = state.close_behavior();
+    let active = state.active_tunnel_count() > 0;
+
+    if behavior == "minimize" {
+        api.prevent_close();
+        let _ = window.hide();
+    } else if behavior == "exit" && !active {
+        // Allow the close to proceed → the app exits and running forwards are cleaned up.
+    } else {
+        api.prevent_close();
+        let _ = window.show();
+        let _ = window.set_focus();
+        // The UI shows the close/minimize dialog; `active` tells it whether forwards are still running.
+        let _ = app.emit("close-requested", active);
+    }
+}
+
+/// Build the system-tray icon and its menu (localized to the current UI language).
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    let zh = app.state::<AppState>().is_zh();
+    let (show_label, quit_label, tooltip) = if zh {
+        ("显示主窗口", "退出", "SSHDeck")
+    } else {
+        ("Show Window", "Quit", "SSHDeck")
+    };
+
+    let show = MenuItem::with_id(app, "show", show_label, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+
+    let mut builder = TrayIconBuilder::new()
+        .tooltip(tooltip)
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)?;
+    Ok(())
 }

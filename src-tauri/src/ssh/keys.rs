@@ -28,7 +28,7 @@ pub fn ensure_public_key(host: &Host, app: &AppHandle) -> Result<String, String>
                 "-N",
                 "",
                 "-C",
-                "ssh-port-forwarder",
+                "sshdeck",
                 "-f",
                 private_key
                     .to_str()

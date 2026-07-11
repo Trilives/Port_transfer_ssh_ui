@@ -1,8 +1,8 @@
-# SSH Port Forwarder
+# SSHDeck
 
 **English** | [中文](README.zh.md)
 
-A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: each SSH server is a top-level item, with multiple port forwards (second level) nested beneath it, plus actions like sending commands, opening a terminal, and uploading keys.
+SSHDeck is a visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: each SSH server is a top-level item, with multiple port forwards (second level) nested beneath it, plus actions like sending commands, opening a terminal, and uploading keys.
 
 ## Screenshots
 
@@ -34,13 +34,16 @@ A visual SSH management tool for Windows. Since v0.2.0 it is **host-centric**: e
 - Dark / light themes and Chinese / English UI; **light by default**, and the settings options follow the UI language.
 - On startup it checks whether the OpenSSH client is installed; if not, a dialog offers one-click install (admin rights, downloaded from Windows Update).
 - On exit, it cleans up the SSH forward processes it started; connection processes run in the background without extra terminal windows.
+- **In-app updates**: Settings → Software Update checks GitHub Releases and installs a newer signed build in place (with a restart), so you don't have to download the installer manually. Turn on **Automatic updates** to have updates install on startup; leave it off and a small notice appears on the main screen when one is available.
 
 ## Download & Run
 
-Download `v0.2.6` from GitHub Releases:
+Download `v0.3.0-beta.1` from GitHub Releases:
 
-- Recommended installer: `SSH Port Forwarder_0.2.6_x64-setup.exe`
-- Or run the portable build directly: `ssh-port-forwarder.exe`
+- Recommended installer: `SSHDeck_0.3.0-beta.1_x64-setup.exe`
+- Or run the portable build directly: `sshdeck.exe`
+
+Already installed? Just open **Settings → Software Update** and click **Check for updates**.
 
 Before running, make sure the Windows OpenSSH Client is installed and that PowerShell can run:
 

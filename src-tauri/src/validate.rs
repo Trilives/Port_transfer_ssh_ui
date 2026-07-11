@@ -1,5 +1,15 @@
 use crate::model::{Forward, Host, TunnelMode};
 
+/// Whether an SSH host string uses only characters `ssh` accepts for a hostname/FQDN or IP address:
+/// ASCII letters, digits, and `. - _ :` (colon for IPv6, `%` for an IPv6 zone id). This rejects spaces
+/// and non-ASCII characters (e.g. Chinese) up front, since ssh cannot resolve or connect to them.
+pub fn hostname_chars_ok(host: &str) -> bool {
+    let trimmed = host.trim();
+    trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '%'))
+}
+
 /// Validate only the minimal parameters needed for SSH connectivity (used by runtime operations like probing, uploading a key).
 /// Not validated when creating/editing a host; usability is always deferred to connect time.
 pub fn validate_host_connection(host: &Host) -> Result<(), String> {

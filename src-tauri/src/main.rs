@@ -6,10 +6,10 @@ fn main() {
         .and_then(|path| path.file_stem().map(|name| name.to_string_lossy().to_string()))
         .unwrap_or_default();
     if exe_name.contains("askpass") || std::env::args().any(|arg| arg == "--askpass") {
-        if let Ok(password) = std::env::var("SSH_PORT_FORWARDER_PASSWORD") {
+        if let Ok(password) = std::env::var("SSHDECK_PASSWORD") {
             println!("{password}");
         }
         return;
     }
-    ssh_port_forwarder_lib::run();
+    sshdeck_lib::run();
 }

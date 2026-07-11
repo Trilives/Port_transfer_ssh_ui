@@ -1,8 +1,10 @@
 pub mod exec;
 pub mod forwards;
+pub mod history;
 pub mod hosts;
 pub mod keys;
 pub mod settings;
 pub mod system;
 pub mod transfer;
 pub mod vscode;
+pub mod window;

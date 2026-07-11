@@ -6,6 +6,7 @@ use crate::ssh::process::{restart_forward, stop_tunnel};
 use crate::state::AppState;
 use crate::store::write_json;
 use crate::util::{lock_error, now_millis};
+use crate::validate::hostname_chars_ok;
 
 #[tauri::command]
 pub fn list_hosts(state: State<AppState>) -> Result<Vec<HostView>, String> {
@@ -17,7 +18,16 @@ pub fn list_hosts(state: State<AppState>) -> Result<Vec<HostView>, String> {
 
 #[tauri::command]
 pub fn save_host(mut host: Host, state: State<AppState>, app: AppHandle) -> Result<HostView, String> {
-    // No parameter validation when creating/editing a host; usability is deferred to connect-time (probe/upload/forward).
+    // Connectivity/usability is deferred to connect-time, but the SSH host must use characters ssh can actually
+    // resolve — reject non-ASCII / spaces at save time so an unusable host can't be stored.
+    if !hostname_chars_ok(&host.ssh_host) {
+        return Err(if state.is_zh() {
+            "远程 IP 只能包含英文字母、数字和 . - _ :（不允许空格或中文等非 ASCII 字符）。".to_string()
+        } else {
+            "Remote IP may only contain letters, digits, and . - _ : (no spaces or non-ASCII characters)."
+                .to_string()
+        });
+    }
     if host.id.trim().is_empty() {
         host.id = Uuid::new_v4().to_string();
     }

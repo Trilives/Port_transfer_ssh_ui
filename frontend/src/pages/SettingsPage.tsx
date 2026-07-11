@@ -1,9 +1,10 @@
 import { type ReactNode } from "react";
+import { Button } from "../components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Select } from "../components/ui/select";
 import { t } from "../i18n";
 import { languageLabels } from "../i18n";
-import type { AppSettings, Language, LogLevel, ThemeName } from "../types";
+import type { AppSettings, CloseBehavior, Language, LogLevel, ThemeName, UpdateState } from "../types";
 
 function SettingSelect(props: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
   return (
@@ -16,7 +17,82 @@ function SettingSelect(props: { label: string; value: string; onChange: (value: 
   );
 }
 
-export function SettingsPage(props: { settings: AppSettings; setSettings: (settings: Partial<AppSettings>) => void }) {
+function UpdateSection(props: {
+  lang: Language;
+  appVersion: string;
+  update: UpdateState;
+  autoUpdate: boolean;
+  onSetAutoUpdate: (value: boolean) => void;
+  onCheck: () => void;
+  onInstall: () => void;
+}) {
+  const { lang, update } = props;
+  const busy = update.status === "checking" || update.status === "downloading" || update.status === "restarting";
+
+  return (
+    <div className="mt-2 grid grid-cols-[160px_1fr] items-start gap-4 border-t border-slate-200/70 pt-5 text-sm dark:border-slate-800">
+      <span className="font-medium text-slate-600 dark:text-slate-300">{t(lang, "updates")}</span>
+      <div className="space-y-3">
+        <div className="text-slate-500 dark:text-slate-400">
+          {t(lang, "currentVersion")}: <span className="font-mono text-slate-700 dark:text-slate-200">{props.appVersion || "—"}</span>
+        </div>
+
+        <label className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+          <span className="w-32 font-medium">{t(lang, "autoUpdate")}</span>
+          <Select value={props.autoUpdate ? "on" : "off"} onChange={(e) => props.onSetAutoUpdate(e.target.value === "on")} className="w-40">
+            <option value="on">{t(lang, "autoUpdateOn")}</option>
+            <option value="off">{t(lang, "autoUpdateOff")}</option>
+          </Select>
+        </label>
+
+        {update.status === "checking" && <p className="text-slate-500 dark:text-slate-400">{t(lang, "checkingUpdate")}</p>}
+        {update.status === "uptodate" && <p className="text-emerald-600 dark:text-emerald-400">{t(lang, "upToDate")}</p>}
+        {update.status === "downloading" && <p className="text-slate-500 dark:text-slate-400">{t(lang, "downloadingUpdate")}</p>}
+        {update.status === "restarting" && <p className="text-slate-500 dark:text-slate-400">{t(lang, "restartingUpdate")}</p>}
+        {update.status === "error" && (
+          <p className="whitespace-pre-wrap text-rose-600 dark:text-rose-400">
+            {t(lang, "updateFailed").replace("{error}", update.error ?? "")}
+          </p>
+        )}
+
+        {update.status === "available" && (
+          <div className="space-y-2">
+            <p className="font-medium text-blue-600 dark:text-blue-400">
+              {t(lang, "updateAvailable").replace("{version}", update.version ?? "")}
+            </p>
+            {update.notes && (
+              <div className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900/50">
+                <div className="mb-1 font-medium text-slate-500 dark:text-slate-400">{t(lang, "releaseNotes")}</div>
+                <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-sans text-slate-600 dark:text-slate-300">{update.notes}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={props.onCheck} disabled={busy}>
+            {t(lang, "checkUpdate")}
+          </Button>
+          {update.status === "available" && (
+            <Button onClick={props.onInstall} disabled={busy}>
+              {t(lang, "downloadInstall")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SettingsPage(props: {
+  settings: AppSettings;
+  setSettings: (settings: Partial<AppSettings>) => void;
+  appVersion: string;
+  update: UpdateState;
+  onCheckUpdate: () => void;
+  onInstallUpdate: () => void;
+}) {
+  const setAutoUpdate = (value: boolean) => props.setSettings({ autoUpdate: value });
   const lang = props.settings.language;
   return (
     <Card className="max-w-3xl">
@@ -42,6 +118,20 @@ export function SettingsPage(props: { settings: AppSettings; setSettings: (setti
           <option value="warning">{t(lang, "logWarning")}</option>
           <option value="error">{t(lang, "logError")}</option>
         </SettingSelect>
+        <SettingSelect label={t(lang, "closeBehavior")} value={props.settings.closeBehavior} onChange={(v) => props.setSettings({ closeBehavior: v as CloseBehavior })}>
+          <option value="ask">{t(lang, "closeBehaviorAsk")}</option>
+          <option value="minimize">{t(lang, "closeBehaviorMinimize")}</option>
+          <option value="exit">{t(lang, "closeBehaviorExit")}</option>
+        </SettingSelect>
+        <UpdateSection
+          lang={lang}
+          appVersion={props.appVersion}
+          update={props.update}
+          autoUpdate={props.settings.autoUpdate}
+          onSetAutoUpdate={setAutoUpdate}
+          onCheck={props.onCheckUpdate}
+          onInstall={props.onInstallUpdate}
+        />
       </div>
     </Card>
   );

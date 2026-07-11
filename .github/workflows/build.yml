@@ -1,13 +1,10 @@
 name: Build
 
-# Multiplatform Tauri build: Windows, Linux, and macOS.
+# Windows-only Tauri build.
 #
-# - On pull requests and manual runs: builds all three platforms as a smoke test
-#   and uploads the installers as workflow artifacts.
-# - On a version tag (v*): builds all three and publishes them to a GitHub Release.
-#
-# Builds for Windows and Linux. Cross-platform icons live in src-tauri/icons and the
-# frontend build command is OS-agnostic (`npm`, not `npm.cmd`).
+# - On pull requests and manual runs: builds the app as a smoke test and uploads
+#   the NSIS installer as a workflow artifact.
+# - On a version tag (v*): builds and publishes it to a GitHub Release.
 
 on:
   push:
@@ -28,39 +25,11 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux: 22.04 provides webkit2gtk-4.1, which Tauri v2 links against.
-          - platform: ubuntu-22.04
-            args: ""
-            rust-targets: ""
-          - platform: windows-latest
-            args: ""
-            rust-targets: ""
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # Tauri's Linux WebView + bundler system dependencies.
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev \
-            file \
-            build-essential \
-            curl \
-            wget
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -71,41 +40,41 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust-targets }}
 
-      # Cache Rust build artifacts, keyed per-OS.
+      # Cache Rust build artifacts.
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          key: ${{ matrix.platform }}
 
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
       # Builds the frontend (via beforeBuildCommand), compiles the Rust app, and
-      # bundles per-platform installers. On a v* tag it also drafts a Release.
+      # bundles the NSIS installer. On a v* tag it also drafts a Release.
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing keys for the auto-updater. Set these repo secrets from the keypair
+          # generated with `tauri signer generate`. Without them, updater artifacts
+          # (the signed .sig + latest.json) are not produced.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SSH Port Forwarder __VERSION__' || '' }}
-          releaseBody: "See the assets below to download and install."
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SSHDeck __VERSION__' || '' }}
+          releaseBody: "See the assets below to download and install. The app can also update itself from Settings → Software Update."
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
 
-      # For PR / manual runs (no tag), keep the installers as downloadable artifacts.
+      # For PR / manual runs (no tag), keep the installer as a downloadable artifact.
       - name: Upload artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
         with:
-          name: ssh-port-forwarder-${{ matrix.platform }}
+          name: sshdeck-windows
           path: |
             src-tauri/target/release/bundle/**/*
-            src-tauri/target/*/release/bundle/**/*
           if-no-files-found: warn
           retention-days: 7

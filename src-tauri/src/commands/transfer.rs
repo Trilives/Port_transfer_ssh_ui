@@ -41,7 +41,7 @@ fn dedup_key(host: &Host) -> String {
 #[tauri::command]
 pub fn read_import_file() -> Result<Vec<Host>, String> {
     let Some(path) = FileDialog::new()
-        .add_filter("SSH Port Forwarder", &["json"])
+        .add_filter("SSHDeck", &["json"])
         .add_filter("All files", &["*"])
         .pick_file()
     else {
@@ -177,8 +177,8 @@ pub fn export_hosts_to_file(
 ) -> Result<bool, String> {
     let hosts = selected_hosts(state.inner(), &host_ids)?;
     let Some(path) = FileDialog::new()
-        .add_filter("SSH Port Forwarder", &["json"])
-        .set_file_name("ssh-port-forwarder-hosts.json")
+        .add_filter("SSHDeck", &["json"])
+        .set_file_name("sshdeck-hosts.json")
         .save_file()
     else {
         return Ok(false);

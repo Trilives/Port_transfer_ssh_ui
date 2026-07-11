@@ -140,6 +140,18 @@ pub struct AppSettings {
     pub theme: String,
     pub language: String,
     pub log_level: String,
+    /// What clicking the window's close button does: `ask` (prompt each time), `minimize` (to the tray),
+    /// or `exit` (quit the app). When forwards are running, `exit` still prompts as a safety check.
+    #[serde(default = "default_close_behavior")]
+    pub close_behavior: String,
+    /// When true, a newer signed release found on startup is downloaded and installed automatically;
+    /// when false, the app only surfaces an "update available" notice and lets the user install it.
+    #[serde(default)]
+    pub auto_update: bool,
+}
+
+fn default_close_behavior() -> String {
+    "ask".to_string()
 }
 
 impl Default for AppSettings {
@@ -148,8 +160,31 @@ impl Default for AppSettings {
             theme: "light".to_string(),
             language: "zh-CN".to_string(),
             log_level: "info".to_string(),
+            close_behavior: default_close_behavior(),
+            auto_update: false,
         }
     }
+}
+
+/// One entry in the local "open history": a port that was opened, a VS Code remote folder that was launched,
+/// or a terminal that was opened. Persisted to `history.json` and sorted by `opened_at` (most recent first).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryEntry {
+    pub id: String,
+    pub host_id: String,
+    /// `vscode` | `terminal` | `port`.
+    pub kind: String,
+    /// Primary display text (VS Code remote path, host name for terminal, or the forward's bind address for a port).
+    pub label: String,
+    /// VS Code folder URI, used to reopen a `vscode` entry as-is. Empty for other kinds.
+    #[serde(default)]
+    pub uri: String,
+    /// Secondary payload: the browser URL for a `port` entry (so it can be reopened). Empty otherwise.
+    #[serde(default)]
+    pub detail: String,
+    /// When this entry was last opened/discovered (Unix ms).
+    pub opened_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

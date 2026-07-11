@@ -123,8 +123,7 @@ fn capture(program: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Windows: `netstat -ano` for the PID, then `tasklist` for the process name.
-#[cfg(target_os = "windows")]
+/// `netstat -ano` for the PID, then `tasklist` for the process name.
 fn find_listeners(port: &str) -> Vec<(u32, String)> {
     let Some(text) = capture("netstat", &["-ano", "-p", "tcp"]) else {
         return Vec::new();
@@ -138,36 +137,7 @@ fn find_listeners(port: &str) -> Vec<(u32, String)> {
         .collect()
 }
 
-/// Linux: `ss` reports the listening socket plus its owning process(es); fall back to `lsof` when `ss` is absent.
-#[cfg(target_os = "linux")]
-fn find_listeners(port: &str) -> Vec<(u32, String)> {
-    if let Some(text) = capture("ss", &["-H", "-tlnp"]) {
-        return parse_ss_listeners(&text, port);
-    }
-    let filter = format!("-iTCP:{port}");
-    match capture("lsof", &["-nP", filter.as_str(), "-sTCP:LISTEN", "-Fpc"]) {
-        Some(text) => parse_lsof(&text),
-        None => Vec::new(),
-    }
-}
-
-/// macOS: `lsof` in field mode lists the pid (`p`) and command (`c`) of each listener.
-#[cfg(target_os = "macos")]
-fn find_listeners(port: &str) -> Vec<(u32, String)> {
-    let filter = format!("-iTCP:{port}");
-    match capture("lsof", &["-nP", filter.as_str(), "-sTCP:LISTEN", "-Fpc"]) {
-        Some(text) => parse_lsof(&text),
-        None => Vec::new(),
-    }
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-fn find_listeners(_port: &str) -> Vec<(u32, String)> {
-    Vec::new()
-}
-
-/// Windows: look up the process name for a PID via `tasklist`.
-#[cfg(target_os = "windows")]
+/// Look up the process name for a PID via `tasklist`.
 fn process_name(pid: &str) -> Option<String> {
     let filter = format!("PID eq {pid}");
     let text = capture("tasklist", &["/FI", filter.as_str(), "/FO", "CSV", "/NH"])?;
@@ -183,7 +153,6 @@ fn process_name(pid: &str) -> Option<String> {
 
 /// Parse the PIDs listening on `port` from `netstat -ano -p tcp` output.
 /// Line shape: `TCP  0.0.0.0:8000  0.0.0.0:0  LISTENING  1234`.
-#[allow(dead_code)]
 fn parse_netstat_pids(text: &str, port: &str) -> Vec<u32> {
     let needle = format!(":{port}");
     let mut pids = Vec::new();
@@ -203,98 +172,9 @@ fn parse_netstat_pids(text: &str, port: &str) -> Vec<u32> {
     pids
 }
 
-/// Parse `(pid, process)` pairs listening on `port` from `ss -H -tlnp` output.
-/// Line shape: `LISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:(("python3",pid=4321,fd=3))`.
-#[allow(dead_code)]
-fn parse_ss_listeners(text: &str, port: &str) -> Vec<(u32, String)> {
-    let needle = format!(":{port}");
-    let mut result = Vec::new();
-    for line in text.lines() {
-        let cols: Vec<&str> = line.split_whitespace().collect();
-        if cols.len() < 4 {
-            continue;
-        }
-        // Column 3 is the local address (State, Recv-Q, Send-Q, Local, ...).
-        let local = cols[3];
-        let matches = match local.rfind(':') {
-            Some(idx) => local[idx..] == needle,
-            None => false,
-        };
-        if matches {
-            result.extend(parse_ss_users(line));
-        }
-    }
-    result
-}
-
-/// Extract `(pid, name)` pairs from an `ss` line's `users:(("name",pid=N,fd=M),...)` field.
-#[allow(dead_code)]
-fn parse_ss_users(line: &str) -> Vec<(u32, String)> {
-    let mut result = Vec::new();
-    // Each process entry begins with `("` — the name follows, then `pid=<num>`.
-    for chunk in line.split("(\"").skip(1) {
-        let name = chunk.split('"').next().unwrap_or("").to_string();
-        if let Some(after) = chunk.split("pid=").nth(1) {
-            let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
-            if let Ok(pid) = digits.parse::<u32>() {
-                result.push((pid, name));
-            }
-        }
-    }
-    result
-}
-
-/// Parse `lsof -Fpc` field output: `p<pid>` lines followed by `c<command>` lines.
-#[allow(dead_code)]
-fn parse_lsof(text: &str) -> Vec<(u32, String)> {
-    let mut result = Vec::new();
-    let mut current: Option<u32> = None;
-    for line in text.lines() {
-        if let Some(rest) = line.strip_prefix('p') {
-            current = rest.trim().parse().ok();
-        } else if let Some(rest) = line.strip_prefix('c') {
-            if let Some(pid) = current {
-                result.push((pid, rest.trim().to_string()));
-            }
-        }
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn ss_parses_pid_and_name() {
-        let text = "LISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:((\"python3\",pid=4321,fd=3))\n\
-                    LISTEN 0 128 [::]:22 [::]:* users:((\"sshd\",pid=1000,fd=3))";
-        assert_eq!(parse_ss_listeners(text, "8000"), vec![(4321, "python3".to_string())]);
-    }
-
-    #[test]
-    fn ss_ignores_non_matching_ports() {
-        let text = "LISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:((\"python3\",pid=4321,fd=3))";
-        assert!(parse_ss_listeners(text, "9000").is_empty());
-    }
-
-    #[test]
-    fn ss_matches_ipv6_and_multiple_processes() {
-        let text = "LISTEN 0 128 [::]:80 [::]:* users:((\"nginx\",pid=1,fd=6),(\"nginx\",pid=2,fd=6))";
-        assert_eq!(
-            parse_ss_listeners(text, "80"),
-            vec![(1, "nginx".to_string()), (2, "nginx".to_string())]
-        );
-    }
-
-    #[test]
-    fn lsof_pairs_pid_with_command() {
-        let text = "p4321\ncpython3\np5000\ncnode\n";
-        assert_eq!(
-            parse_lsof(text),
-            vec![(4321, "python3".to_string()), (5000, "node".to_string())]
-        );
-    }
 
     #[test]
     fn netstat_extracts_listening_pid() {

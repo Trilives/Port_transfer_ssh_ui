@@ -1,11 +1,11 @@
 import { type ReactNode, useState } from "react";
-import { FolderOpen, FolderSearch, PenLine, Plug, X } from "lucide-react";
+import { FolderOpen, FolderSearch, Globe, PenLine, Plug, Terminal, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { t } from "../i18n";
-import type { CriticalErrorPayload, Forward, Host, Language, TunnelMode } from "../types";
+import type { CriticalErrorPayload, Forward, HistoryEntry, HistoryKind, Host, Language, TunnelMode } from "../types";
 
 function Modal(props: { children: ReactNode; maxWidth?: string }) {
   return (
@@ -66,7 +66,8 @@ export function HostDialog(props: {
         <Field
           label={t(lang, "sshHost")}
           value={props.draft.sshHost}
-          onChange={(v) => update("sshHost", v)}
+          // ssh can only resolve ASCII hosts: strip spaces and non-ASCII (e.g. Chinese) as they're typed.
+          onChange={(v) => update("sshHost", v.replace(/[^A-Za-z0-9.\-_:%]/g, ""))}
           hint={t(lang, "sshHostHint")}
         />
         <Field label={t(lang, "sshPort")} value={props.draft.sshPort} onChange={(v) => update("sshPort", v)} />
@@ -516,11 +517,28 @@ export function ConnectionErrorDialog(props: {
   );
 }
 
-export function VscodeHistoryDialog(props: {
+const historyKindIcon: Record<HistoryKind, typeof FolderOpen> = {
+  vscode: FolderOpen,
+  terminal: Terminal,
+  port: Globe,
+};
+
+/** Short "MM-DD HH:mm" stamp for a history entry's last-opened time. */
+function formatOpenedAt(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Combined open-history for a host: recent VS Code folders, terminals, and ports (sorted by recency),
+ * plus VS Code's direct-connect and open-a-specific-directory affordances.
+ */
+export function OpenHistoryDialog(props: {
   language: Language;
   hostName: string;
-  entries: { uri: string; path: string }[];
-  onOpenEntry: (uri: string) => void;
+  entries: HistoryEntry[];
+  onOpenEntry: (entry: HistoryEntry) => void;
   onOpenDirect: () => void;
   onOpenPath: (path: string) => void;
   onCancel: () => void;
@@ -528,15 +546,12 @@ export function VscodeHistoryDialog(props: {
   const lang = props.language;
   const empty = props.entries.length === 0;
   const [customPath, setCustomPath] = useState("");
+  // A port entry is only reopenable when it has a browser URL; others always are.
+  const canOpen = (entry: HistoryEntry) => entry.kind !== "port" || Boolean(entry.detail);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
       <Card className="w-full max-w-lg border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
-        <DialogHeader title={`${t(lang, "vscodeHistoryTitle")} — ${props.hostName}`} description={t(lang, "vscodeHistoryDesc")} onClose={props.onCancel} />
-        {empty && (
-          <p className="mb-3 rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm leading-6 text-slate-500 dark:border-slate-800 dark:text-slate-400">
-            {t(lang, "vscodeNoHistory")}
-          </p>
-        )}
+        <DialogHeader title={`${t(lang, "historyTitle")} — ${props.hostName}`} description={t(lang, "historyDesc")} onClose={props.onCancel} />
         <div className="grid max-h-80 gap-1 overflow-auto">
           <button
             onClick={props.onOpenDirect}
@@ -545,29 +560,46 @@ export function VscodeHistoryDialog(props: {
             <Plug size={16} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">{t(lang, "vscodeDirect")}</span>
           </button>
-          {props.entries.map((entry) => (
-            <div
-              key={entry.uri}
-              className="flex items-center rounded-xl text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
-            >
-              <button
-                onClick={() => props.onOpenEntry(entry.uri)}
-                title={entry.path}
-                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
+          {empty && (
+            <p className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm leading-6 text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              {t(lang, "historyEmpty")}
+            </p>
+          )}
+          {props.entries.map((entry) => {
+            const Icon = historyKindIcon[entry.kind];
+            const openable = canOpen(entry);
+            return (
+              <div
+                key={entry.id}
+                className="flex items-center rounded-xl text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
               >
-                <FolderOpen size={16} className="shrink-0 text-slate-400" />
-                <span className="min-w-0 flex-1 truncate">{entry.path}</span>
-              </button>
-              <button
-                onClick={() => setCustomPath(entry.path)}
-                title={t(lang, "vscodeFillPath")}
-                aria-label={t(lang, "vscodeFillPath")}
-                className="mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <PenLine size={15} />
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={() => openable && props.onOpenEntry(entry)}
+                  disabled={!openable}
+                  title={entry.label}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left disabled:cursor-default"
+                >
+                  <Icon size={16} className="shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="block truncate">{entry.label}</span>
+                    <span className="block text-xs text-slate-400 dark:text-slate-500">
+                      {t(lang, `historyKind_${entry.kind}` as Parameters<typeof t>[1])} · {formatOpenedAt(entry.openedAt)}
+                    </span>
+                  </span>
+                </button>
+                {entry.kind === "vscode" && (
+                  <button
+                    onClick={() => setCustomPath(entry.label)}
+                    title={t(lang, "vscodeFillPath")}
+                    aria-label={t(lang, "vscodeFillPath")}
+                    className="mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                  >
+                    <PenLine size={15} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
         <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
           <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">{t(lang, "vscodeOpenPathLabel")}</label>
@@ -588,6 +620,45 @@ export function VscodeHistoryDialog(props: {
         </div>
         <div className="mt-5 flex justify-end">
           <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Shown when the window's close button is clicked (behavior "ask", or "exit" while forwards are running):
+ * choose to minimize to the tray or quit, optionally remembering the choice as the new default.
+ */
+export function CloseBehaviorDialog(props: {
+  language: Language;
+  active: boolean;
+  onMinimize: (remember: boolean) => void;
+  onExit: (remember: boolean) => void;
+  onCancel: () => void;
+}) {
+  const lang = props.language;
+  const [remember, setRemember] = useState(false);
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
+      <Card className="w-full max-w-md border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
+        <CardHeader>
+          <CardTitle>{t(lang, "closePromptTitle")}</CardTitle>
+          <CardDescription>{props.active ? t(lang, "closePromptActiveDesc") : t(lang, "closePromptDesc")}</CardDescription>
+        </CardHeader>
+        <label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 text-sm font-medium dark:bg-slate-900">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          {t(lang, "closePromptRemember")}
+        </label>
+        <div className="mt-4 flex flex-wrap justify-end gap-3">
+          <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
+          <Button variant="secondary" onClick={() => props.onMinimize(remember)}>{t(lang, "closePromptMinimize")}</Button>
+          <Button variant="danger" onClick={() => props.onExit(remember)}>{t(lang, "closePromptExit")}</Button>
         </div>
       </Card>
     </div>

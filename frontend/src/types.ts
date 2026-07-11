@@ -3,6 +3,8 @@ export type TunnelStatus = "running" | "stopped";
 export type ThemeName = "dark" | "light";
 export type Language = "zh-CN" | "en-US";
 export type LogLevel = "debug" | "info" | "warning" | "error";
+/** What the window's close button does: prompt each time, minimize to tray, or quit. */
+export type CloseBehavior = "ask" | "minimize" | "exit";
 
 /** Level 2: a single port forward (including view fields attached by the backend). */
 export interface Forward {
@@ -50,6 +52,21 @@ export interface AppSettings {
   theme: ThemeName;
   language: Language;
   logLevel: LogLevel;
+  closeBehavior: CloseBehavior;
+  /** When true, an update found on startup installs automatically; when false, only a notice is shown. */
+  autoUpdate: boolean;
+}
+
+/** In-app auto-update flow state (see the updater plugin wiring in App.tsx / SettingsPage). */
+export type UpdateStatus = "idle" | "checking" | "uptodate" | "available" | "downloading" | "restarting" | "error";
+export interface UpdateState {
+  status: UpdateStatus;
+  /** Version offered by the release (when status is "available"/"downloading"/"restarting"). */
+  version?: string;
+  /** Release notes body for the available update. */
+  notes?: string;
+  /** Error message when status is "error". */
+  error?: string;
 }
 
 export interface LogEntry {
@@ -81,4 +98,20 @@ export interface VscodeHistoryEntry {
 export interface VscodeOpenRootResult {
   addedToConfig: boolean;
   alias: string;
+  /** Folder URI opened (specific-path opens), used to record/reopen it; empty for a direct connect. */
+  uri: string;
+}
+
+/** One entry in the local open-history (a port opened, a VS Code folder launched, or a terminal opened). */
+export type HistoryKind = "vscode" | "terminal" | "port";
+export interface HistoryEntry {
+  id: string;
+  hostId: string;
+  kind: HistoryKind;
+  label: string;
+  /** VS Code folder URI (reopen a vscode entry as-is). Empty for other kinds. */
+  uri: string;
+  /** Browser URL for a port entry (so it can be reopened). Empty otherwise. */
+  detail: string;
+  openedAt: number;
 }

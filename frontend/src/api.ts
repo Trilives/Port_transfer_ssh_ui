@@ -2,10 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppSettings,
   Forward,
+  HistoryEntry,
   Host,
   ImportResult,
   LogEntry,
-  VscodeHistoryEntry,
   VscodeOpenRootResult,
   VscodeStatus,
 } from "./types";
@@ -52,10 +52,16 @@ export const api = {
 
   // VS Code Remote-SSH
   vscodeStatus: () => invoke<VscodeStatus>("vscode_status"),
-  vscodeSshHistory: (hostId: string) => invoke<VscodeHistoryEntry[]>("vscode_ssh_history", { hostId }),
-  vscodeOpen: (uri: string) => invoke<void>("vscode_open", { uri }),
+  vscodeOpen: (uri: string, hostId: string, label: string) => invoke<void>("vscode_open", { uri, hostId, label }),
   vscodeOpenDirect: (hostId: string) => invoke<VscodeOpenRootResult>("vscode_open_direct", { hostId }),
   vscodeOpenPath: (hostId: string, path: string) => invoke<VscodeOpenRootResult>("vscode_open_path", { hostId, path }),
+
+  // Open history (ports / VS Code / terminal)
+  listHistory: (hostId: string) => invoke<HistoryEntry[]>("list_history", { hostId }),
+
+  // Window / tray
+  hideToTray: () => invoke<void>("hide_to_tray"),
+  quitApp: () => invoke<void>("quit_app"),
 
   // Settings / logs
   getSettings: () => invoke<AppSettings>("get_settings"),
