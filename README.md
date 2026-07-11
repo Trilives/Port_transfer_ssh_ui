@@ -38,9 +38,9 @@ SSHDeck is a visual SSH management tool for Windows. Since v0.2.0 it is **host-c
 
 ## Download & Run
 
-Download `v0.3.0-beta.1` from GitHub Releases:
+Download `v0.3.1-beta.1` from GitHub Releases:
 
-- Recommended installer: `SSHDeck_0.3.0-beta.1_x64-setup.exe`
+- Recommended installer: `SSHDeck_0.3.1-beta.1_x64-setup.exe`
 - Or run the portable build directly: `sshdeck.exe`
 
 Already installed? Just open **Settings → Software Update** and click **Check for updates**.

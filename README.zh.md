@@ -38,9 +38,9 @@ SSHDeck 是一个面向 Windows 的可视化 SSH 管理工具。从 v0.2.0 起�
 
 ## 下载与运行
 
-从 GitHub Releases 下载 `v0.3.0-beta.1`：
+从 GitHub Releases 下载 `v0.3.1-beta.1`：
 
-- 推荐下载安装包：`SSHDeck_0.3.0-beta.1_x64-setup.exe`
+- 推荐下载安装包：`SSHDeck_0.3.1-beta.1_x64-setup.exe`
 - 也可以直接运行免安装程序：`sshdeck.exe`
 
 已经安装过？直接打开「设置 → 软件更新」，点击「检查更新」即可。

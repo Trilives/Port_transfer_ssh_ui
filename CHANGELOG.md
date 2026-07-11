@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0-beta.1
+## 0.3.1-beta.1
 
 **Added**
 - In-app auto-update: **Settings → Software Update** checks GitHub Releases, shows the new version and its notes, and installs a newer signed build in place (then restarts). Powered by `tauri-plugin-updater` + `tauri-plugin-process`; releases are signed in CI and verified against a pinned public key.

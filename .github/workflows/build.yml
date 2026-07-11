@@ -64,7 +64,7 @@ jobs:
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SSHDeck __VERSION__' || '' }}
-          releaseBody: "See the assets below to download and install. The app can also update itself from Settings → Software Update."
+          releaseBody: "See the assets below to download and install. The app can also update itself from the Settings page under Software Update."
           releaseDraft: true
           prerelease: false
 
