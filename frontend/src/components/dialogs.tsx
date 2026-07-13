@@ -1,11 +1,11 @@
-import { type ReactNode, useState } from "react";
-import { FolderOpen, FolderSearch, Globe, PenLine, Plug, Terminal, X } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import { Code2, FolderOpen, PenLine, Terminal, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { t } from "../i18n";
-import type { CriticalErrorPayload, Forward, HistoryEntry, HistoryKind, Host, Language, TunnelMode } from "../types";
+import type { CriticalErrorPayload, Forward, HistoryEntry, Host, Language, TunnelMode } from "../types";
 
 function Modal(props: { children: ReactNode; maxWidth?: string }) {
   return (
@@ -517,12 +517,6 @@ export function ConnectionErrorDialog(props: {
   );
 }
 
-const historyKindIcon: Record<HistoryKind, typeof FolderOpen> = {
-  vscode: FolderOpen,
-  terminal: Terminal,
-  port: Globe,
-};
-
 /** Short "MM-DD HH:mm" stamp for a history entry's last-opened time. */
 function formatOpenedAt(ms: number): string {
   const d = new Date(ms);
@@ -531,94 +525,96 @@ function formatOpenedAt(ms: number): string {
 }
 
 /**
- * Combined open-history for a host: recent VS Code folders, terminals, and ports (sorted by recency),
- * plus VS Code's direct-connect and open-a-specific-directory affordances.
+ * Remote-connection window for a host: a list of remote paths (from VS Code Remote-SSH history, matched
+ * by IP). Clicking a record opens a terminal `cd`'d into that path; the VS Code button opens it in VS Code;
+ * the pen icon fills it into the retained manual field. The manual field opens a typed path with either tool.
  */
-export function OpenHistoryDialog(props: {
+export function RemoteConnectionDialog(props: {
   language: Language;
   hostName: string;
   entries: HistoryEntry[];
-  onOpenEntry: (entry: HistoryEntry) => void;
-  onOpenDirect: () => void;
-  onOpenPath: (path: string) => void;
+  onOpenTerminalEntry: (entry: HistoryEntry) => void;
+  onOpenVscodeEntry: (entry: HistoryEntry) => void;
+  onOpenTerminalPath: (path: string) => void;
+  onOpenVscodePath: (path: string) => void;
   onCancel: () => void;
 }) {
   const lang = props.language;
   const empty = props.entries.length === 0;
   const [customPath, setCustomPath] = useState("");
-  // A port entry is only reopenable when it has a browser URL; others always are.
-  const canOpen = (entry: HistoryEntry) => entry.kind !== "port" || Boolean(entry.detail);
+  const path = customPath.trim();
+  // Dialog-wide shortcuts: Enter opens the (blank-friendly) path in a terminal, Esc cancels.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Enter") props.onOpenTerminalPath(path);
+      else if (event.key === "Escape") props.onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [path, props]);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
       <Card className="w-full max-w-lg border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
         <DialogHeader title={`${t(lang, "historyTitle")} — ${props.hostName}`} description={t(lang, "historyDesc")} onClose={props.onCancel} />
         <div className="grid max-h-80 gap-1 overflow-auto">
-          <button
-            onClick={props.onOpenDirect}
-            className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
-          >
-            <Plug size={16} className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{t(lang, "vscodeDirect")}</span>
-          </button>
           {empty && (
             <p className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm leading-6 text-slate-500 dark:border-slate-800 dark:text-slate-400">
               {t(lang, "historyEmpty")}
             </p>
           )}
-          {props.entries.map((entry) => {
-            const Icon = historyKindIcon[entry.kind];
-            const openable = canOpen(entry);
-            return (
-              <div
-                key={entry.id}
-                className="flex items-center rounded-xl text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+          {props.entries.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex items-center rounded-xl text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              <button
+                onClick={() => props.onOpenTerminalEntry(entry)}
+                title={`${t(lang, "openInTerminal")} — ${entry.label}`}
+                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
               >
-                <button
-                  onClick={() => openable && props.onOpenEntry(entry)}
-                  disabled={!openable}
-                  title={entry.label}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left disabled:cursor-default"
-                >
-                  <Icon size={16} className="shrink-0 text-slate-400" />
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="block truncate">{entry.label}</span>
-                    <span className="block text-xs text-slate-400 dark:text-slate-500">
-                      {t(lang, `historyKind_${entry.kind}` as Parameters<typeof t>[1])} · {formatOpenedAt(entry.openedAt)}
-                    </span>
-                  </span>
-                </button>
-                {entry.kind === "vscode" && (
-                  <button
-                    onClick={() => setCustomPath(entry.label)}
-                    title={t(lang, "vscodeFillPath")}
-                    aria-label={t(lang, "vscodeFillPath")}
-                    className="mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                  >
-                    <PenLine size={15} />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+                <FolderOpen size={16} className="shrink-0 text-slate-400" />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="block truncate">{entry.label}</span>
+                  <span className="block text-xs text-slate-400 dark:text-slate-500">{formatOpenedAt(entry.openedAt)}</span>
+                </span>
+              </button>
+              <button
+                onClick={() => props.onOpenVscodeEntry(entry)}
+                title={t(lang, "openInVscode")}
+                className="mr-1 flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <Code2 size={15} />
+                {t(lang, "remoteOpenVscode")}
+              </button>
+              <button
+                onClick={() => setCustomPath(entry.label)}
+                title={t(lang, "vscodeFillPath")}
+                aria-label={t(lang, "vscodeFillPath")}
+                className="mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <PenLine size={15} />
+              </button>
+            </div>
+          ))}
         </div>
         <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-          <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">{t(lang, "vscodeOpenPathLabel")}</label>
-          <div className="flex gap-2">
-            <Input
-              value={customPath}
-              placeholder={t(lang, "vscodeOpenPathPlaceholder")}
-              onChange={(e) => setCustomPath(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && customPath.trim()) props.onOpenPath(customPath.trim());
-              }}
-            />
-            <Button onClick={() => props.onOpenPath(customPath.trim())} disabled={!customPath.trim()}>
-              <FolderSearch size={16} />
-              {t(lang, "vscodeOpenPathButton")}
-            </Button>
-          </div>
+          <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">{t(lang, "remoteOpenPathLabel")}</label>
+          <Input
+            value={customPath}
+            placeholder={t(lang, "remoteOpenPathPlaceholder")}
+            onChange={(e) => setCustomPath(e.target.value)}
+            autoFocus
+          />
         </div>
-        <div className="mt-5 flex justify-end">
+        <div className="mt-5 flex justify-end gap-3">
+          <Button variant="secondary" className="min-w-[7.5rem]" onClick={() => props.onOpenTerminalPath(path)}>
+            <Terminal size={16} />
+            {t(lang, "remoteOpenTerminal")}
+          </Button>
+          <Button className="min-w-[7.5rem]" onClick={() => props.onOpenVscodePath(path)}>
+            <Code2 size={16} />
+            {t(lang, "remoteOpenVscode")}
+          </Button>
           <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
         </div>
       </Card>

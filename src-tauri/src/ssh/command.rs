@@ -157,7 +157,9 @@ pub fn build_send_command(
 }
 
 /// ssh args for the interactive terminal (excludes `ssh` itself, which is assembled separately later).
-pub fn build_terminal_args(host: &Host) -> Result<Vec<String>, String> {
+/// When `path` is a non-empty remote directory, allocate a pty (`-t`) and `cd` into it before dropping
+/// into an interactive login shell (falling back to the home dir if the path is gone).
+pub fn build_terminal_args(host: &Host, path: Option<&str>) -> Result<Vec<String>, String> {
     let mut command = vec![
         "ssh".to_string(),
         "-p".to_string(),
@@ -165,6 +167,18 @@ pub fn build_terminal_args(host: &Host) -> Result<Vec<String>, String> {
     ];
     push_identity_and_extra(host, &mut command)?;
     push_proxy_jump(host, &mut command);
+
+    let path = path.map(str::trim).filter(|p| !p.is_empty());
+    if path.is_some() {
+        // A pty is required for the interactive login shell we launch after cd'ing.
+        command.push("-t".to_string());
+    }
     command.push(destination(host));
+    if let Some(path) = path {
+        // Single-quote the path (escaping embedded quotes) so spaces/special chars survive the remote shell.
+        // A non-login interactive shell keeps the cwd we just cd'd into (a login shell's profile might reset it).
+        let quoted = format!("'{}'", path.replace('\'', "'\\''"));
+        command.push(format!("cd {quoted} 2>/dev/null; exec \"${{SHELL:-/bin/bash}}\""));
+    }
     Ok(command)
 }

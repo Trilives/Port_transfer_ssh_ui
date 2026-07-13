@@ -5,6 +5,8 @@ export type Language = "zh-CN" | "en-US";
 export type LogLevel = "debug" | "info" | "warning" | "error";
 /** What the window's close button does: prompt each time, minimize to tray, or quit. */
 export type CloseBehavior = "ask" | "minimize" | "exit";
+/** Which release channel the in-app updater checks: stable releases or preview pre-releases. */
+export type UpdateChannel = "stable" | "preview";
 
 /** Level 2: a single port forward (including view fields attached by the backend). */
 export interface Forward {
@@ -55,6 +57,8 @@ export interface AppSettings {
   closeBehavior: CloseBehavior;
   /** When true, an update found on startup installs automatically; when false, only a notice is shown. */
   autoUpdate: boolean;
+  /** Which release channel to check for updates: stable (default) or preview (pre-releases). */
+  updateChannel: UpdateChannel;
 }
 
 /** In-app auto-update flow state (see the updater plugin wiring in App.tsx / SettingsPage). */

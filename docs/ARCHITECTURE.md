@@ -87,8 +87,9 @@ Forward (level 2 = a single port forward)
 
 - Persistence files (all in the system app-data directory): `hosts.json` (forwards nested inside), `settings.json`,
   and `history.json` (the open-history log).
-- `AppSettings` also carries `closeBehavior` (`ask｜minimize｜exit`) — what the window close button does — and
-  `autoUpdate` (bool) — whether an update found on startup installs automatically.
+- `AppSettings` also carries `closeBehavior` (`ask｜minimize｜exit`) — what the window close button does —
+  `autoUpdate` (bool) — whether an update found on startup installs automatically — and `updateChannel`
+  (`stable｜preview`) — which release channel the updater checks.
 - `HistoryEntry` (one open-history row): `id, hostId, kind (vscode｜terminal｜port), label, uri, detail, openedAt`.
   Ports/terminals/VS Code opens are upserted (deduped per host, bumped to now), sorted most-recent-first.
 - The v0.1.x `profiles.json` **is not migrated**; if present, it's backed up to `profiles.json.v0.1.bak` on startup.
@@ -109,7 +110,7 @@ portcheck.rs       local port-in-use detection + owning process name/PID (netsta
 sshconfig.rs       parse/write ~/.ssh/config (import hosts, export to a managed block, look up alias by IP)
 vscode.rs          VS Code Remote-SSH: detect install, read history, match by IP, write config, open folder-uri
 history.rs         open-history pure logic: upsert/dedup, merge scanned VS Code entries, sort by recency
-terminal.rs        open_terminal: launches an external PowerShell window running ssh
+terminal.rs        open_terminal: launches an external PowerShell window running ssh (optionally `cd`'d into a remote path)
 ssh/
   command.rs       build_ssh / build_probe / build_key_upload / build_send command construction
   diagnose.rs      classify_ssh_failure: classify unreachable/auth/etc. failures from stderr, with localized reasons
@@ -117,7 +118,7 @@ ssh/
   probe.rs         probe_connection / get_host_fingerprint / remove_known_host
   keys.rs          ensure_public_key / resolve_identity_file / upload_key_to_remote
 commands/          thin #[tauri::command] wrappers, one file per domain:
-  hosts.rs forwards.rs exec.rs keys.rs settings.rs transfer.rs vscode.rs system.rs history.rs window.rs
+  hosts.rs forwards.rs exec.rs keys.rs settings.rs transfer.rs vscode.rs system.rs history.rs update.rs window.rs
 ```
 
 `window.rs` also exposes `show_main_window`, used by the tray and the single-instance callback to raise the running window.
@@ -131,8 +132,10 @@ pages/               DashboardPage ConfigPage LogsPage SettingsPage GuidePage
 components/          HostCard ForwardRow StatusBadge LogTable dialogs.tsx ui/*
 ```
 
-Dialogs of note in `dialogs.tsx`: `OpenHistoryDialog` (combined VS Code / terminal / port history, plus VS Code
-direct-connect and open-path), and `CloseBehaviorDialog` (the minimize-to-tray vs quit prompt).
+Dialogs of note in `dialogs.tsx`: `RemoteConnectionDialog` (the per-host "Remote Connection" window — a list of
+remote paths from VS Code Remote-SSH history, each openable in a terminal `cd`'d into it or in VS Code, plus a
+retained manual path field with Terminal / VS Code buttons), and `CloseBehaviorDialog` (the minimize-to-tray vs
+quit prompt).
 
 Data loading, polling, and all dialog state are orchestrated centrally in `App.tsx`; pages and components stay purely
 presentational (receiving data and callbacks via props). See [MODULARITY.md](MODULARITY.md) for the layering rules behind this split.
@@ -144,12 +147,13 @@ presentational (receiving data and callbacks via props). See [MODULARITY.md](MOD
 | Host | `list_hosts` `save_host` `set_host_pinned` `delete_host` | `save_host` rejects non-ASCII/space `sshHost`; other usability is checked at connect time; `delete_host` disconnects its forwards first |
 | Import/export | `read_import_file` `read_import_ssh_config` `import_hosts` `export_hosts_to_file` `export_hosts_to_ssh_config` | dedup by sshHost/IP; strategy `""` detects conflicts, `overwrite`, or `skip` |
 | Forward | `save_forward` `delete_forward` `connect_forward[_with_password]` `disconnect_forward` `disconnect_host` `disconnect_all` | connect probes first; port-in-use is only checked at connect time |
-| Command/Terminal | `send_command` `open_terminal` `open_url` | `open_url` opens http/https in the default browser (the "Open in browser" button) |
+| Command/Terminal | `send_command` `open_terminal` `open_url` | `open_terminal(hostId, path?)` — a non-empty `path` opens the shell `cd`'d into that remote dir; `open_url` opens http/https in the default browser (the "Open in browser" button) |
 | Keys/Probe | `upload_public_key` `probe_connection` `get_host_fingerprint` `remove_known_host` | `probe_connection` returns `ready｜password_required｜host_key_changed`, or an Err with a reason for unreachable hosts |
 | Settings/Logs | `get_settings` `save_settings_cmd` `list_logs` | default theme is light |
 | System | `check_ssh` `install_openssh` | installs OpenSSH via elevated `Add-WindowsCapability` |
 | VS Code | `vscode_status` `vscode_open` `vscode_open_direct` `vscode_open_path` | `vscode_open(uri, hostId, label)` bumps the entry and rescans; opens matched by host IP via `~/.ssh/config` (see `vscode.rs` for the state.vscdb/storage.json merge logic) |
-| History | `list_history` | returns a host's open-history (recency-sorted), rescanning + merging VS Code's own history on the way |
+| History | `list_history` | returns a host's open-history (recency-sorted), rescanning + merging VS Code's own history on the way; the Remote Connection dialog shows the `vscode` (remote-path) entries |
+| Update | `check_update` `install_update` | channel-aware; each builds the updater with the channel's endpoint (`stable` = releases/latest, `preview` = releases/download/preview/latest.json) and verifies the configured `pubkey` |
 | Window | `hide_to_tray` `quit_app` | driven by the close prompt; the tray/single-instance raise the window in Rust |
 
 Events: `log-entry` (one log line); `critical-error` (forward exited with code 255; payload has `hostId/forwardId/name/message`, frontend shows one dialog and stops auto-reconnect); `close-requested` (payload = whether forwards are running; the frontend shows the close/minimize prompt).
@@ -169,28 +173,40 @@ Events: `log-entry` (one log line); `critical-error` (forward exited with code 2
   prompts and calls `connect_forward_with_password` (password injected via `SSH_ASKPASS`, never written to disk, kept in
   memory only if `keepConnected`), `host_key_changed` shows the fingerprint and offers `remove_known_host` + retry.
 - **External terminal**: `open_terminal` opens a visible, independent PowerShell window running interactive `ssh`; it's not
-  tracked or cleaned up by the app. The open is recorded in the history.
-- **Open in VS Code**: opening the history window (`list_history`) merges Remote-SSH's `state.vscdb` (preferred, freshest)
-  with `storage.json` (fallback) and matches folders to the host by IP. "Direct" (`vscode_open_direct`) reuses or writes a
-  `~/.ssh/config` alias and opens a connected window with no folder; a specific path (`vscode_open_path`) resolves
-  `~`/relative paths against the remote `$HOME` via a one-time passwordless probe.
-- **Open-history**: opening a port, a terminal, or a VS Code folder upserts a `HistoryEntry` (deduped per host, bumped to
-  now). Opening a port or launching VS Code also rescans VS Code's own history and merges any new folders. The combined,
-  recency-sorted list feeds the per-host history window (`OpenHistoryDialog`).
+  tracked or cleaned up by the app. A non-empty `path` allocates a pty (`-t`) and `cd`s into that remote dir before the
+  login shell. A plain (no-path) open is recorded in the history.
+- **Remote Connection**: the per-host "Remote Connection" button (and the single Home icon) opens `RemoteConnectionDialog`.
+  It lists the host's remote **paths** — `list_history` merges Remote-SSH's `state.vscdb` (preferred, freshest) with
+  `storage.json` (fallback), matched to the host by IP. Clicking a record opens a terminal `cd`'d into that path; the
+  VS Code button opens it in VS Code (`vscode_open` by URI, else `vscode_open_path`); the pen icon fills the manual field.
+  The manual field opens a typed path with either tool — an empty VS Code open falls back to a direct connect
+  (`vscode_open_path` → `open_direct_for_host`, which reuses or writes a `~/.ssh/config` alias); `~`/relative paths resolve
+  against the remote `$HOME` via a one-time passwordless probe. Opening the dialog does not require VS Code; the
+  install/Remote-SSH check happens only when a VS Code action is invoked.
+- **Open-history**: opening a port, a plain terminal, or a VS Code folder upserts a `HistoryEntry` (deduped per host,
+  bumped to now). Opening a port or launching VS Code also rescans VS Code's own history and merges any new folders.
+  Terminal-at-path opens are not recorded (they're already represented by the VS Code path list). The recency-sorted
+  `vscode` (path) entries feed `RemoteConnectionDialog`.
 - **Close to tray / minimize**: `handle_close_requested` (a `WindowEvent::CloseRequested` handler) reads `closeBehavior` —
   `minimize` hides to the tray, `exit` quits when nothing is running, otherwise (or `exit` with forwards live) it prevents the
   close and emits `close-requested` so the UI can prompt. The tray menu offers Show/Quit; clicking the tray icon raises the window.
 - **Single instance**: `tauri-plugin-single-instance` (registered first) focuses the running window instead of launching a
   second process.
 
-- **In-app auto-update**: the `tauri-plugin-updater` + `tauri-plugin-process` plugins power the update flow. On startup the
-  frontend runs one `check()` against the GitHub Releases `latest.json` (`plugins.updater.endpoints` in `tauri.conf.json`);
-  if a newer signed release exists and `AppSettings.autoUpdate` is on, it installs silently (`downloadAndInstall()` then
-  `relaunch()`); otherwise it shows a small "update available" banner on Home and the same update on Settings, where
-  "Download & install" runs the same flow. The Settings page also offers a manual "Check for updates" and the auto-update
-  toggle. Releases are signed in CI with the key whose public half is pinned in `pubkey`; the private key + password live
-  in the `TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]` repo secrets, and `bundle.createUpdaterArtifacts` makes the build emit the
-  signed archive and `latest.json`.
+- **In-app auto-update (channel-aware)**: check and install run in **Rust** (`commands/update.rs`), because the JS
+  `check()` can only read the single static endpoint in `tauri.conf.json` — runtime channel selection needs
+  `UpdaterExt::updater_builder().endpoints(...)`. `AppSettings.updateChannel` (`stable｜preview`) picks the endpoint:
+  stable = `releases/latest/download/latest.json` (GitHub's non-prerelease latest), preview =
+  `releases/download/preview/latest.json` (a rolling `preview` pre-release CI refreshes on every beta tag). On startup the
+  frontend calls `check_update(channel)`; if a newer signed release exists and `autoUpdate` is on it calls
+  `install_update(channel)` (which re-checks, `download_and_install`, then `app.restart()`); otherwise it shows the Home
+  banner and the Settings entry, where "Download & install" runs the same command. Settings also offers a manual "Check for
+  updates", the channel selector, and the auto-update toggle. The `tauri-plugin-updater` / `tauri-plugin-process` plugins
+  stay registered (the Rust updater is built on the former). Releases are signed in CI with the key whose public half is
+  pinned in `pubkey` (same key for both channels); the private key + password live in the
+  `TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]` repo secrets, `bundle.createUpdaterArtifacts` makes the build emit the signed
+  archive and `latest.json`, and `.github/workflows/build.yml` publishes pre-release tags directly and mirrors their
+  `latest.json` onto the `preview` release.
 
 On app exit, all forward child processes started by this app are cleaned up.
 

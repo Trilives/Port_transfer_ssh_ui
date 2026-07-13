@@ -1,56 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Code2, ChevronDown, ChevronRight, KeyRound, Pencil, Pin, PinOff, Plus, Server, Terminal, Trash2, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, Pencil, Pin, PinOff, Plug, Plus, Server, Trash2, Zap } from "lucide-react";
 import { Button } from "./ui/button";
 import { ForwardRow } from "./ForwardRow";
 import { cn } from "../lib/utils";
 import { t } from "../i18n";
 import type { Forward, Host, Language } from "../types";
-
-/** Split button: left side opens a PowerShell terminal, the small arrow on the right expands a menu (incl. "Open in VS Code"). */
-function TerminalSplitButton(props: { language: Language; onOpenTerminal: () => void; onOpenVscode: () => void }) {
-  const lang = props.language;
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [open]);
-  return (
-    <div ref={ref} className="relative inline-flex">
-      <Button variant="secondary" className="rounded-r-none" onClick={props.onOpenTerminal}>
-        <Terminal size={15} />
-        {t(lang, "openTerminal")}
-      </Button>
-      <Button
-        variant="secondary"
-        className="rounded-l-none border-l border-slate-300 px-2 dark:border-slate-600"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={t(lang, "more")}
-        title={t(lang, "more")}
-      >
-        <ChevronDown size={14} />
-      </Button>
-      {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-soft dark:border-slate-800 dark:bg-slate-950">
-          <button
-            onClick={() => {
-              setOpen(false);
-              props.onOpenVscode();
-            }}
-            className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
-          >
-            <Code2 size={15} />
-            {t(lang, "openInVscode")}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function HostCard(props: {
   language: Language;
@@ -58,8 +11,7 @@ export function HostCard(props: {
   expanded: boolean;
   onToggle: () => void;
   onSendCommand: () => void;
-  onOpenTerminal: () => void;
-  onOpenVscode: () => void;
+  onOpenRemoteConnection: () => void;
   onUploadKey: () => void;
   onNewForward: () => void;
   onEditHost: () => void;
@@ -129,7 +81,10 @@ export function HostCard(props: {
               <Zap size={15} />
               {t(lang, "sendCommand")}
             </Button>
-            <TerminalSplitButton language={lang} onOpenTerminal={props.onOpenTerminal} onOpenVscode={props.onOpenVscode} />
+            <Button variant="secondary" onClick={props.onOpenRemoteConnection}>
+              <Plug size={15} />
+              {t(lang, "remoteConnection")}
+            </Button>
             <Button variant="secondary" onClick={props.onUploadKey}>
               <KeyRound size={15} />
               {t(lang, "uploadKey")}

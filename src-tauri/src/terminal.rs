@@ -5,8 +5,9 @@ use crate::ssh::command::build_terminal_args;
 
 /// Open an external terminal window running an interactive `ssh` connected to the host.
 /// The window is independent of the app and fully interactive (Tab completion handled by the remote shell).
-pub fn open_terminal(host: &Host) -> Result<(), String> {
-    let args = build_terminal_args(host)?;
+/// A non-empty `path` opens the shell already `cd`'d into that remote directory.
+pub fn open_terminal(host: &Host, path: Option<&str>) -> Result<(), String> {
+    let args = build_terminal_args(host, path)?;
     open_terminal_platform(&args)
 }
 

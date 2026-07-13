@@ -64,6 +64,8 @@ pub fn run() {
             commands::vscode::vscode_open_direct,
             commands::vscode::vscode_open_path,
             commands::history::list_history,
+            commands::update::check_update,
+            commands::update::install_update,
             commands::window::hide_to_tray,
             commands::window::quit_app
         ])

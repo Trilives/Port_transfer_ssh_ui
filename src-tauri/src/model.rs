@@ -148,10 +148,17 @@ pub struct AppSettings {
     /// when false, the app only surfaces an "update available" notice and lets the user install it.
     #[serde(default)]
     pub auto_update: bool,
+    /// Which release channel to check for updates: `stable` (default) or `preview` (pre-releases).
+    #[serde(default = "default_update_channel")]
+    pub update_channel: String,
 }
 
 fn default_close_behavior() -> String {
     "ask".to_string()
+}
+
+fn default_update_channel() -> String {
+    "stable".to_string()
 }
 
 impl Default for AppSettings {
@@ -162,6 +169,7 @@ impl Default for AppSettings {
             log_level: "info".to_string(),
             close_behavior: default_close_behavior(),
             auto_update: false,
+            update_channel: default_update_channel(),
         }
     }
 }

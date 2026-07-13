@@ -22,14 +22,15 @@ pub fn save_settings_cmd(
         log_level: normalize_choice(&settings.log_level, &["debug", "info", "warning", "error"], "info"),
         close_behavior: normalize_choice(&settings.close_behavior, &["ask", "minimize", "exit"], "ask"),
         auto_update: settings.auto_update,
+        update_channel: normalize_choice(&settings.update_channel, &["stable", "preview"], "stable"),
     };
     *state.settings.lock().map_err(lock_error)? = normalized.clone();
     write_json(state.settings_path(), &normalized)?;
     state.add_log(
         "info",
         format!(
-            "[settings] theme={} language={} logLevel={} closeBehavior={} autoUpdate={}",
-            normalized.theme, normalized.language, normalized.log_level, normalized.close_behavior, normalized.auto_update
+            "[settings] theme={} language={} logLevel={} closeBehavior={} autoUpdate={} updateChannel={}",
+            normalized.theme, normalized.language, normalized.log_level, normalized.close_behavior, normalized.auto_update, normalized.update_channel
         ),
         Some(&app),
     );

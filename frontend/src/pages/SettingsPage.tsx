@@ -4,7 +4,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/c
 import { Select } from "../components/ui/select";
 import { t } from "../i18n";
 import { languageLabels } from "../i18n";
-import type { AppSettings, CloseBehavior, Language, LogLevel, ThemeName, UpdateState } from "../types";
+import type { AppSettings, CloseBehavior, Language, LogLevel, ThemeName, UpdateChannel, UpdateState } from "../types";
 
 function SettingSelect(props: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
   return (
@@ -22,7 +22,9 @@ function UpdateSection(props: {
   appVersion: string;
   update: UpdateState;
   autoUpdate: boolean;
+  updateChannel: UpdateChannel;
   onSetAutoUpdate: (value: boolean) => void;
+  onSetChannel: (value: UpdateChannel) => void;
   onCheck: () => void;
   onInstall: () => void;
 }) {
@@ -36,6 +38,14 @@ function UpdateSection(props: {
         <div className="text-slate-500 dark:text-slate-400">
           {t(lang, "currentVersion")}: <span className="font-mono text-slate-700 dark:text-slate-200">{props.appVersion || "—"}</span>
         </div>
+
+        <label className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+          <span className="w-32 font-medium">{t(lang, "updateChannel")}</span>
+          <Select value={props.updateChannel} onChange={(e) => props.onSetChannel(e.target.value as UpdateChannel)} className="w-40">
+            <option value="stable">{t(lang, "channelStable")}</option>
+            <option value="preview">{t(lang, "channelPreview")}</option>
+          </Select>
+        </label>
 
         <label className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
           <span className="w-32 font-medium">{t(lang, "autoUpdate")}</span>
@@ -93,6 +103,7 @@ export function SettingsPage(props: {
   onInstallUpdate: () => void;
 }) {
   const setAutoUpdate = (value: boolean) => props.setSettings({ autoUpdate: value });
+  const setChannel = (value: UpdateChannel) => props.setSettings({ updateChannel: value });
   const lang = props.settings.language;
   return (
     <Card className="max-w-3xl">
@@ -128,7 +139,9 @@ export function SettingsPage(props: {
           appVersion={props.appVersion}
           update={props.update}
           autoUpdate={props.settings.autoUpdate}
+          updateChannel={props.settings.updateChannel}
           onSetAutoUpdate={setAutoUpdate}
+          onSetChannel={setChannel}
           onCheck={props.onCheckUpdate}
           onInstall={props.onInstallUpdate}
         />

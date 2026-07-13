@@ -6,5 +6,6 @@ pub mod keys;
 pub mod settings;
 pub mod system;
 pub mod transfer;
+pub mod update;
 pub mod vscode;
 pub mod window;

@@ -1,4 +1,4 @@
-import { Activity, CircleSlash, Code2, Globe, Pin, Plus, PlugZap, Server, Terminal } from "lucide-react";
+import { Activity, CircleSlash, Globe, Pin, Plug, Plus, PlugZap, Server } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { cn } from "../lib/utils";
@@ -20,8 +20,7 @@ export function DashboardPage(props: {
   onStopAll: () => void;
   onDisconnectForward: (host: Host, forward: Forward) => void;
   onOpenForwardWeb: (host: Host, forward: Forward) => void;
-  onOpenTerminal: (host: Host) => void;
-  onOpenVscode: (host: Host) => void;
+  onOpenRemoteConnection: (host: Host) => void;
 }) {
   const lang = props.language;
   const groups = props.hosts
@@ -123,19 +122,11 @@ export function DashboardPage(props: {
                 <div className="flex shrink-0 gap-1">
                   <Button
                     variant="ghost"
-                    onClick={() => props.onOpenTerminal(host)}
-                    aria-label={t(lang, "openTerminal")}
-                    title={t(lang, "openTerminal")}
+                    onClick={() => props.onOpenRemoteConnection(host)}
+                    aria-label={t(lang, "remoteConnection")}
+                    title={t(lang, "remoteConnection")}
                   >
-                    <Terminal size={16} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => props.onOpenVscode(host)}
-                    aria-label={t(lang, "openInVscode")}
-                    title={t(lang, "openInVscode")}
-                  >
-                    <Code2 size={16} />
+                    <Plug size={16} />
                   </Button>
                 </div>
               </div>

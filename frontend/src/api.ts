@@ -6,9 +6,16 @@ import type {
   Host,
   ImportResult,
   LogEntry,
+  UpdateChannel,
   VscodeOpenRootResult,
   VscodeStatus,
 } from "./types";
+
+/** Update offered on a channel (from the Rust channel-aware updater). */
+export interface UpdateInfo {
+  version: string;
+  notes: string;
+}
 
 export const api = {
   // Hosts (level 1)
@@ -39,7 +46,7 @@ export const api = {
   sendCommand: (hostId: string, command: string) => invoke<string>("send_command", { hostId, command }),
   sendCommandWithPassword: (hostId: string, command: string, password: string) =>
     invoke<string>("send_command_with_password", { hostId, command, password }),
-  openTerminal: (hostId: string) => invoke<void>("open_terminal", { hostId }),
+  openTerminal: (hostId: string, path?: string) => invoke<void>("open_terminal", { hostId, path: path ?? null }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   uploadPublicKey: (hostId: string, password: string) => invoke<Host>("upload_public_key", { hostId, password }),
   probeConnection: (hostId: string) => invoke<string>("probe_connection", { hostId }),
@@ -58,6 +65,10 @@ export const api = {
 
   // Open history (ports / VS Code / terminal)
   listHistory: (hostId: string) => invoke<HistoryEntry[]>("list_history", { hostId }),
+
+  // In-app auto-update (channel-aware, Rust side)
+  checkUpdate: (channel: UpdateChannel) => invoke<UpdateInfo | null>("check_update", { channel }),
+  installUpdate: (channel: UpdateChannel) => invoke<void>("install_update", { channel }),
 
   // Window / tray
   hideToTray: () => invoke<void>("hide_to_tray"),

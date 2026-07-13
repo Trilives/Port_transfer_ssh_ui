@@ -4,7 +4,9 @@ name: Build
 #
 # - On pull requests and manual runs: builds the app as a smoke test and uploads
 #   the NSIS installer as a workflow artifact.
-# - On a version tag (v*): builds and publishes it to a GitHub Release.
+# - On a stable version tag (v1.2.3): builds and drafts a GitHub Release for the Stable channel.
+# - On a pre-release tag (v1.2.3-beta.1): builds a published pre-release and mirrors its `latest.json`
+#   onto the rolling `preview` release, which the in-app Preview update channel points at.
 
 on:
   push:
@@ -65,8 +67,24 @@ jobs:
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SSHDeck __VERSION__' || '' }}
           releaseBody: "See the assets below to download and install. The app can also update itself from the Settings page under Software Update."
-          releaseDraft: true
-          prerelease: false
+          # Stable tags (v1.2.3) are drafted for manual publishing; pre-release tags (v1.2.3-beta.1) are
+          # published immediately as a pre-release so the Preview channel's manifest resolves to live assets.
+          releaseDraft: ${{ !contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+      # Preview channel: mirror the pre-release's signed manifest onto the fixed, rolling `preview` release,
+      # which the app's Preview endpoint (releases/download/preview/latest.json) points at. The installer URLs
+      # inside latest.json reference this pre-release's (published) assets, so no installer copy is needed.
+      - name: Publish preview manifest
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create preview --prerelease --title "Preview channel" \
+            --notes "Rolling manifest for the in-app Preview update channel. Do not delete." || true
+          gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir preview-manifest --clobber
+          gh release upload preview preview-manifest/latest.json --clobber
 
       # For PR / manual runs (no tag), keep the installer as a downloadable artifact.
       - name: Upload artifacts

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
-import { check, type Update } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { Activity, BookOpen, ScrollText, Server, Settings as SettingsIcon, Terminal } from "lucide-react";
 import { api } from "./api";
 import { cn, forwardWebUrl } from "./lib/utils";
@@ -18,8 +16,8 @@ import {
   ImportConflictDialog,
   InputPasswordDialog,
   KeyUploadDialog,
-  OpenHistoryDialog,
   PasswordDialog,
+  RemoteConnectionDialog,
   SelectHostsDialog,
   SendCommandDialog,
   SshMissingDialog,
@@ -30,11 +28,11 @@ import { ConfigPage } from "./pages/ConfigPage";
 import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { GuidePage } from "./pages/GuidePage";
-import type { AppSettings, CriticalErrorPayload, Forward, HistoryEntry, Host, LogEntry, LogLevel, UpdateState } from "./types";
+import type { AppSettings, CriticalErrorPayload, Forward, HistoryEntry, Host, LogEntry, LogLevel, UpdateChannel, UpdateState } from "./types";
 
 type Page = "dashboard" | "config" | "logs" | "settings" | "guide";
 
-const defaultSettings: AppSettings = { theme: "light", language: "zh-CN", logLevel: "info", closeBehavior: "ask", autoUpdate: false };
+const defaultSettings: AppSettings = { theme: "light", language: "zh-CN", logLevel: "info", closeBehavior: "ask", autoUpdate: false, updateChannel: "stable" };
 
 const newHost = (): Host => ({
   id: "",
@@ -110,7 +108,6 @@ export function App() {
   const [appVersion, setAppVersion] = useState("");
   const [update, setUpdate] = useState<UpdateState>({ status: "idle" });
   const [updateDismissed, setUpdateDismissed] = useState(false);
-  const pendingUpdate = useRef<Update | null>(null);
   const didStartupUpdateCheck = useRef(false);
 
   const language = settings.language;
@@ -549,14 +546,6 @@ export function App() {
     setSendCmdPwValue("");
   }
 
-  async function openTerminal(host: Host) {
-    try {
-      await api.openTerminal(host.id);
-    } catch (err) {
-      setError(String(err));
-    }
-  }
-
   async function openForwardWeb(forward: Forward) {
     try {
       await api.openUrl(forwardWebUrl(forward));
@@ -565,65 +554,69 @@ export function App() {
     }
   }
 
-  // ---- Open history (VS Code / terminal / port) ----
-  async function openVscode(host: Host) {
+  // ---- Remote connection (terminal / VS Code, by remote path) ----
+  // Open the dialog with the host's remote-path history. This works without VS Code installed; the VS Code
+  // install/Remote-SSH check happens only when a VS Code action is invoked.
+  async function openRemoteConnection(host: Host) {
     setError("");
     try {
-      const status = await api.vscodeStatus();
-      if (!status.installed) {
-        setVscodeMissing("vscode");
-        return;
-      }
-      if (!status.remoteSsh) {
-        setVscodeMissing("remoteSsh");
-        return;
-      }
       // Loading history also rescans VS Code's own history and merges anything new (backend side).
-      const entries = await api.listHistory(host.id);
+      const entries = (await api.listHistory(host.id)).filter((entry) => entry.kind === "vscode");
       setHistoryDialog({ host, entries });
     } catch (err) {
       setError(String(err));
     }
   }
 
-  async function openHistoryEntry(entry: HistoryEntry) {
-    if (!historyDialog) return;
-    const hostId = historyDialog.host.id;
+  // Prompt if VS Code / Remote-SSH is missing; returns whether a VS Code action may proceed.
+  async function ensureVscode(): Promise<boolean> {
+    const status = await api.vscodeStatus();
+    if (!status.installed) {
+      setVscodeMissing("vscode");
+      return false;
+    }
+    if (!status.remoteSsh) {
+      setVscodeMissing("remoteSsh");
+      return false;
+    }
+    return true;
+  }
+
+  // Open a terminal `cd`'d into a remote path (empty path = plain shell at home).
+  async function openTerminalPath(host: Host, path: string) {
     setHistoryDialog(null);
     try {
-      if (entry.kind === "vscode") {
-        await api.vscodeOpen(entry.uri, hostId, entry.label);
-      } else if (entry.kind === "terminal") {
-        await api.openTerminal(hostId);
-      } else if (entry.kind === "port" && entry.detail) {
-        await api.openUrl(entry.detail);
-      }
+      await api.openTerminal(host.id, path.trim() || undefined);
     } catch (err) {
       setError(String(err));
     }
   }
 
-  async function openVscodeDirect(host: Host) {
-    try {
-      const result = await api.vscodeOpenDirect(host.id);
-      setHistoryDialog(null);
-      if (result.addedToConfig) {
-        setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
-      }
-    } catch (err) {
-      setHistoryDialog(null);
-      setError(String(err));
-    }
-  }
-
+  // Open a remote path in VS Code (empty path = direct connect, via the backend's empty-path fallback).
   async function openVscodePath(host: Host, path: string) {
-    if (!path.trim()) return;
     try {
+      if (!(await ensureVscode())) return;
       const result = await api.vscodeOpenPath(host.id, path.trim());
       setHistoryDialog(null);
       if (result.addedToConfig) {
         setNotice(t(language, "vscodeAddedToConfig").replace("{alias}", result.alias));
       }
+    } catch (err) {
+      setHistoryDialog(null);
+      setError(String(err));
+    }
+  }
+
+  // Open a recorded path entry in VS Code, reusing its folder URI when present (else recompute from the path).
+  async function openVscodeEntry(host: Host, entry: HistoryEntry) {
+    if (!entry.uri) {
+      await openVscodePath(host, entry.label);
+      return;
+    }
+    try {
+      if (!(await ensureVscode())) return;
+      await api.vscodeOpen(entry.uri, host.id, entry.label);
+      setHistoryDialog(null);
     } catch (err) {
       setHistoryDialog(null);
       setError(String(err));
@@ -653,20 +646,19 @@ export function App() {
     }
   }
 
-  // ---- In-app auto-update ----
-  // Runs once at startup. Reads the freshest autoUpdate setting (state may still be default at mount),
-  // then either installs automatically or leaves an "available" update for the Home banner / Settings.
+  // ---- In-app auto-update (channel-aware; check/install run in Rust) ----
+  // Runs once at startup. Reads the freshest settings (state may still be default at mount), then either
+  // installs automatically or leaves an "available" update for the Home banner / Settings.
   async function startupUpdateCheck() {
     try {
-      const found = await check();
+      const settings = await api.getSettings();
+      const found = await api.checkUpdate(settings.updateChannel);
       if (!found) return;
-      pendingUpdate.current = found;
-      const auto = (await api.getSettings()).autoUpdate;
-      if (auto) {
-        await installUpdate();
+      if (settings.autoUpdate) {
+        await installUpdate(settings.updateChannel);
       } else {
         setUpdateDismissed(false);
-        setUpdate({ status: "available", version: found.version, notes: found.body ?? "" });
+        setUpdate({ status: "available", version: found.version, notes: found.notes });
       }
     } catch {
       /* Silent on startup; the user can still check manually in Settings. */
@@ -676,13 +668,11 @@ export function App() {
   async function checkForUpdate() {
     setUpdate({ status: "checking" });
     try {
-      const found = await check();
+      const found = await api.checkUpdate(settings.updateChannel);
       if (found) {
-        pendingUpdate.current = found;
         setUpdateDismissed(false);
-        setUpdate({ status: "available", version: found.version, notes: found.body ?? "" });
+        setUpdate({ status: "available", version: found.version, notes: found.notes });
       } else {
-        pendingUpdate.current = null;
         setUpdate({ status: "uptodate" });
       }
     } catch (err) {
@@ -690,14 +680,12 @@ export function App() {
     }
   }
 
-  async function installUpdate() {
-    const found = pendingUpdate.current;
-    if (!found) return;
-    setUpdate({ status: "downloading", version: found.version });
+  // The Rust command re-checks the channel, downloads/installs, and relaunches (so this call won't return on success).
+  async function installUpdate(channel: UpdateChannel) {
+    setUpdate({ status: "downloading", version: update.version });
     try {
-      await found.downloadAndInstall();
-      setUpdate({ status: "restarting", version: found.version });
-      await relaunch();
+      await api.installUpdate(channel);
+      setUpdate({ status: "restarting", version: update.version });
     } catch (err) {
       setUpdate({ status: "error", error: String(err) });
     }
@@ -758,7 +746,7 @@ export function App() {
             <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-950 dark:bg-blue-950/40 dark:text-blue-200">
               <span className="whitespace-pre-wrap">{t(language, "updateBannerText").replace("{version}", update.version ?? "")}</span>
               <div className="flex shrink-0 items-center gap-2">
-                <button onClick={installUpdate} className="rounded-lg bg-blue-600 px-3 py-1.5 font-medium text-white transition hover:bg-blue-500">
+                <button onClick={() => installUpdate(settings.updateChannel)} className="rounded-lg bg-blue-600 px-3 py-1.5 font-medium text-white transition hover:bg-blue-500">
                   {t(language, "updateNow")}
                 </button>
                 <button onClick={() => setUpdateDismissed(true)} className="text-blue-400 hover:text-blue-600">✕</button>
@@ -781,8 +769,7 @@ export function App() {
                 }}
                 onDisconnectForward={disconnectForward}
                 onOpenForwardWeb={(_host, forward) => openForwardWeb(forward)}
-                onOpenTerminal={openTerminal}
-                onOpenVscode={openVscode}
+                onOpenRemoteConnection={openRemoteConnection}
               />
             )}
             {page === "config" && (
@@ -796,8 +783,7 @@ export function App() {
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onTogglePin={toggleHostPin}
                 onSendCommand={openSendCommand}
-                onOpenTerminal={openTerminal}
-                onOpenVscode={openVscode}
+                onOpenRemoteConnection={openRemoteConnection}
                 onUploadKey={requestKeyUpload}
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
                 onConnectForward={connectForward}
@@ -819,7 +805,7 @@ export function App() {
                 appVersion={appVersion}
                 update={update}
                 onCheckUpdate={checkForUpdate}
-                onInstallUpdate={installUpdate}
+                onInstallUpdate={() => installUpdate(settings.updateChannel)}
               />
             )}
             {page === "guide" && <GuidePage language={language} />}
@@ -960,13 +946,14 @@ export function App() {
         <SshMissingDialog language={language} onCancel={() => setSshMissing(false)} onInstall={installSsh} />
       )}
       {historyDialog && (
-        <OpenHistoryDialog
+        <RemoteConnectionDialog
           language={language}
           hostName={historyDialog.host.name}
           entries={historyDialog.entries}
-          onOpenEntry={openHistoryEntry}
-          onOpenDirect={() => openVscodeDirect(historyDialog.host)}
-          onOpenPath={(path) => openVscodePath(historyDialog.host, path)}
+          onOpenTerminalEntry={(entry) => openTerminalPath(historyDialog.host, entry.label)}
+          onOpenVscodeEntry={(entry) => openVscodeEntry(historyDialog.host, entry)}
+          onOpenTerminalPath={(path) => openTerminalPath(historyDialog.host, path)}
+          onOpenVscodePath={(path) => openVscodePath(historyDialog.host, path)}
           onCancel={() => setHistoryDialog(null)}
         />
       )}
