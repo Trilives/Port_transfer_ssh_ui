@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Pencil, Pin, PinOff, Plus, Power, Server, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Pin, PinOff, Plus, Power, Server } from "lucide-react";
 import { Button } from "./ui/button";
 import { ForwardRow } from "./ForwardRow";
 import { cn } from "../lib/utils";
@@ -13,7 +13,6 @@ export function HostCard(props: {
   onNewForward: () => void;
   onDisconnectHost: () => void;
   onEditHost: () => void;
-  onDeleteHost: () => void;
   onTogglePin: () => void;
   onConnectForward: (forward: Forward) => void;
   onDisconnectForward: (forward: Forward) => void;
@@ -66,9 +65,6 @@ export function HostCard(props: {
           ) : (
             <Pin size={15} className="text-blue-600 dark:text-blue-300" />
           )}
-        </Button>
-        <Button variant="danger" onClick={props.onDeleteHost} aria-label={t(lang, "deleteHost")}>
-          <Trash2 size={15} />
         </Button>
       </div>
 

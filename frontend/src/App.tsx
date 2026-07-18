@@ -806,6 +806,7 @@ export function App() {
                 onExportToFile={() => openSelectHosts("export-file", hosts)}
                 onExportToConfig={() => openSelectHosts("export-config", hosts)}
                 onToggle={toggleRemoteHost}
+                onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onRefresh={(host) => void refreshRemoteHistory(host)}
                 onSendCommand={openSendCommand}
                 onUploadKey={requestKeyUpload}
@@ -822,7 +823,6 @@ export function App() {
                 expandedIds={forwardingExpandedIds}
                 onToggle={toggleForwardingExpand}
                 onEditHost={(host) => setHostDialog(host)}
-                onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onTogglePin={toggleHostPin}
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
                 onDisconnectHost={disconnectHost}

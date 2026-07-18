@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Code2, FolderOpen, KeyRound, LoaderCircle, PenLine, RefreshCw, Server, Terminal, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Code2, FolderOpen, KeyRound, LoaderCircle, PenLine, RefreshCw, Server, Terminal, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { HostTransferActions } from "../components/HostTransferActions";
 import { Button } from "../components/ui/button";
@@ -20,6 +20,7 @@ function RemoteHostCard(props: {
   expanded: boolean;
   loading: boolean;
   onToggle: () => void;
+  onDeleteHost: () => void;
   onRefresh: () => void;
   onSendCommand: () => void;
   onUploadKey: () => void;
@@ -35,19 +36,24 @@ function RemoteHostCard(props: {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft dark:border-slate-800 dark:bg-slate-950/70">
-      <button onClick={props.onToggle} className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-slate-50 dark:hover:bg-slate-900">
-        {props.expanded ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
-          <Server size={18} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{props.host.name}</div>
-          <div className="truncate text-xs text-slate-500 dark:text-slate-400">{endpoint}</div>
-        </div>
-        <span className="text-xs text-slate-500 dark:text-slate-400">
-          {props.loading ? t(lang, "loading") : `${props.entries.length} ${t(lang, "remotePathsCount")}`}
-        </span>
-      </button>
+      <div className="flex w-full items-center gap-2 pr-4 transition hover:bg-slate-50 dark:hover:bg-slate-900">
+        <button onClick={props.onToggle} className="flex min-w-0 flex-1 items-center gap-3 px-5 py-4 text-left">
+          {props.expanded ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+            <Server size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{props.host.name}</div>
+            <div className="truncate text-xs text-slate-500 dark:text-slate-400">{endpoint}</div>
+          </div>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {props.loading ? t(lang, "loading") : `${props.entries.length} ${t(lang, "remotePathsCount")}`}
+          </span>
+        </button>
+        <Button variant="danger" onClick={props.onDeleteHost} aria-label={t(lang, "deleteHost")}>
+          <Trash2 size={15} />
+        </Button>
+      </div>
 
       {props.expanded && (
         <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
@@ -123,6 +129,7 @@ export function RemoteConnectionsPage(props: {
   onExportToFile: () => void;
   onExportToConfig: () => void;
   onToggle: (host: Host) => void;
+  onDeleteHost: (host: Host) => void;
   onRefresh: (host: Host) => void;
   onSendCommand: (host: Host) => void;
   onUploadKey: (host: Host) => void;
@@ -161,6 +168,7 @@ export function RemoteConnectionsPage(props: {
               expanded={props.expandedIds.has(host.id)}
               loading={props.loadingIds.has(host.id)}
               onToggle={() => props.onToggle(host)}
+              onDeleteHost={() => props.onDeleteHost(host)}
               onRefresh={() => props.onRefresh(host)}
               onSendCommand={() => props.onSendCommand(host)}
               onUploadKey={() => props.onUploadKey(host)}

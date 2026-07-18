@@ -9,7 +9,6 @@ export function PortForwardingPage(props: {
   expandedIds: Set<string>;
   onToggle: (hostId: string) => void;
   onEditHost: (host: Host) => void;
-  onDeleteHost: (host: Host) => void;
   onTogglePin: (host: Host) => void;
   onNewForward: (host: Host) => void;
   onDisconnectHost: (host: Host) => void;
@@ -43,7 +42,6 @@ export function PortForwardingPage(props: {
                 onNewForward={() => props.onNewForward(host)}
                 onDisconnectHost={() => props.onDisconnectHost(host)}
                 onEditHost={() => props.onEditHost(host)}
-                onDeleteHost={() => props.onDeleteHost(host)}
                 onTogglePin={() => props.onTogglePin(host)}
                 onConnectForward={(forward) => props.onConnectForward(host, forward)}
                 onDisconnectForward={(forward) => props.onDisconnectForward(host, forward)}

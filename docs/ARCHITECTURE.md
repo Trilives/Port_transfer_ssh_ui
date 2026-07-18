@@ -19,7 +19,7 @@ flowchart TB
   subgraph FE[React Frontend]
     Dash[Home/Dashboard] --> Cur[Current connections + key events]
     Remote[Remote Connections page] --> HostTransferActions
-    Remote --> RemoteHostCard --> RemoteActions[Send command / Upload key / Open path]
+    Remote --> RemoteHostCard --> RemoteActions[Send command / Upload key / Open path / Delete host]
     Forwarding[Port Forwarding page] --> HostCard --> ForwardRow
     HostCard --> ForwardActions[New forward / Disconnect host / Edit host]
     FE --> Dlg[Dialogs: Host/Forward/SendCmd/Password/KeyUpload/HostKey]
