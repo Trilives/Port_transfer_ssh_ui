@@ -1,10 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+**Added**
+- Dedicated **Remote Connections** and **Port Forwarding** pages with host-grouped history, terminal / VS Code actions, and Local / Remote / Dynamic forwarding management.
+- Signed in-app updates with Stable and Preview channels, plus an install-free Windows portable ZIP published beside the installer.
 
 **Changed**
-- Unified the Remote Connections and Port Forwarding host headers, including pin/unpin behavior and the pinned badge.
-- Moved Delete Host into the expanded Remote Connections action row and aligned it to the far right.
+- Consolidated New Host, import/export, command, key upload, host deletion, and pin/unpin controls under Remote Connections while keeping forwarding-specific actions on Port Forwarding.
+- Unified host headers across both management pages, moved Delete Host to the far right of the expanded Remote Connections action row, and kept the sidebar fixed while only page content scrolls.
+- Applied the native Windows Mica backdrop and replaced page-top operation messages with five-second floating toasts.
+- Moved per-user data to `%LOCALAPPDATA%\SSHDeck\data` and refreshed the English/Chinese multi-page README previews.
+
+**Fixed**
+- One-off SSH commands run on a blocking worker so the interface remains responsive while remote commands execute.
+- Prevented stale command results from overwriting newer dialogs and fixed narrow-window Chinese layout clipping.
+
+**Upgrade notice**
+- When upgrading directly from beta.4 or earlier, export hosts before updating and import them afterward. The old data directory is not migrated automatically; settings and connection history start fresh.
 
 ## 0.3.0-beta.6
 
