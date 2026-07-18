@@ -6,6 +6,7 @@ import { forwardWebUrl } from "./lib/utils";
 import { t } from "./i18n";
 import { AppSidebar, type AppPage } from "./components/AppSidebar";
 import { AppDialogs } from "./components/AppDialogs";
+import { ToastNotifications } from "./components/ToastNotifications";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PortForwardingPage } from "./pages/PortForwardingPage";
 import { RemoteConnectionsPage } from "./pages/RemoteConnectionsPage";
@@ -121,13 +122,6 @@ export function App() {
       events.forEach((event) => window.removeEventListener(event, reset));
     };
   }, [page, modalOpen]);
-
-  // Notices auto-dismiss after a few minutes (or can be closed manually); errors persist until closed manually.
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 3 * 60 * 1000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -747,22 +741,11 @@ export function App() {
 
   return (
     <main className="h-screen overflow-hidden bg-slate-50/90 text-slate-950 backdrop-blur-xl transition duration-300 dark:bg-[#090d18]/90 dark:text-slate-50">
+      <ToastNotifications language={language} error={error} notice={notice} setError={setError} setNotice={setNotice} />
       <div className="flex h-full min-h-0">
         <AppSidebar language={language} page={page} onNavigate={setPage} />
 
         <section className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
-          {error && (
-            <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-950 dark:bg-rose-950/40 dark:text-rose-200">
-              <span className="whitespace-pre-wrap">{error}</span>
-              <button onClick={() => setError("")} className="shrink-0 text-rose-400 hover:text-rose-600">✕</button>
-            </div>
-          )}
-          {notice && (
-            <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-200">
-              <span className="whitespace-pre-wrap">{notice}</span>
-              <button onClick={() => setNotice("")} className="shrink-0 text-emerald-400 hover:text-emerald-600">✕</button>
-            </div>
-          )}
           {page === "dashboard" && update.status === "available" && !updateDismissed && (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-950 dark:bg-blue-950/40 dark:text-blue-200">
               <span className="whitespace-pre-wrap">{t(language, "updateBannerText").replace("{version}", update.version ?? "")}</span>

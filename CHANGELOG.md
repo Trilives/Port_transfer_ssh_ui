@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-beta.6
 
 **Changed**
 - Applied the native Windows Mica backdrop with a translucent app surface while retaining the standard title bar, resizing, and system window controls.
+- Replaced page-top operation messages with floating success/error toasts that can be dismissed manually and disappear automatically after five seconds.
 
 ## 0.3.0-beta.5
 
