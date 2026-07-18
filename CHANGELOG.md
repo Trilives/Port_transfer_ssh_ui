@@ -10,9 +10,11 @@
 - One-off SSH commands now run on a blocking worker instead of the Tauri IPC runtime, so the interface remains responsive while a remote command is running.
 - Closing a running command dialog no longer lets its eventual result overwrite a newly opened host command dialog.
 - Chinese layouts can shrink and wrap correctly in narrower windows without clipping right-side actions.
+- The sidebar now stays fixed while only the right-hand page content scrolls.
 
 **Changed**
-- Updated the English and Chinese README interface previews and refreshed the architecture documentation.
+- Moved host import/export, New Host, and Upload Key actions to Remote Connections; Port Forwarding now keeps only forwarding actions and adds one-click host disconnect.
+- Replaced the outdated README screenshots with four current 1440×900 English/Chinese page previews and refreshed the architecture documentation.
 - Split navigation, dialog orchestration, remote dialogs, and SSH execution into focused modules to keep files within the project's modularity limits.
 
 ## 0.3.0-beta.2
