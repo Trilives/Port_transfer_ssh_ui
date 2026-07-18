@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-beta.5
+
+**Fixed**
+- Replaced the legacy development-era data path with `%LOCALAPPDATA%\SSHDeck\data`, independent of the source repository, developer name, and installation directory.
+
+**Upgrade notice**
+- There is no automatic migration from beta.4 or earlier. Export hosts before updating, then import them after launching beta.5. Settings and connection history start fresh in the new directory.
+
 ## 0.3.0-beta.4
 
 **Added**

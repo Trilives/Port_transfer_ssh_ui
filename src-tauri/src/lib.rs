@@ -1,3 +1,4 @@
+mod app_data;
 mod commands;
 mod history;
 mod model;

@@ -1,5 +1,4 @@
 use chrono::Local;
-use directories::ProjectDirs;
 use std::{
     collections::HashMap,
     fs,
@@ -55,9 +54,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let data_dir = ProjectDirs::from("com", "codex", "ssh-port-forwarder")
-            .map(|dirs| dirs.data_local_dir().to_path_buf())
-            .unwrap_or_else(|| PathBuf::from(".data"));
+        let data_dir = crate::app_data::resolve();
         let _ = fs::create_dir_all(&data_dir);
 
         // The v0.1.x flat profiles.json is no longer used: back it up once if present, to avoid misreading the old structure.

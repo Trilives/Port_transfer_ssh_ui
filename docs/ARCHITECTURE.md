@@ -222,6 +222,7 @@ On app exit, all forward child processes started by this app are cleaned up.
 
 ## 8. Data Storage
 
-The backend uses `directories::ProjectDirs` for the system app-data directory, writing `hosts.json`, `settings.json`,
-`history.json`, and `logs/` there — never into the source tree or the program's own folder. Config writes are atomic
-(temp file + rename).
+The backend resolves the operating system's per-user local app-data root with `directories::BaseDirs`, then writes
+`hosts.json`, `settings.json`, `history.json`, and `logs/` under `%LOCALAPPDATA%\SSHDeck\data` on Windows — never into
+the source tree or the program's own folder. Config writes are atomic (temp file + rename). The legacy development-era
+directory is intentionally not migrated; beta.4 users must export hosts before upgrading and import them afterward.
