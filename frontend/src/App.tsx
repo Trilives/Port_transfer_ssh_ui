@@ -789,6 +789,7 @@ export function App() {
                 onExportToFile={() => openSelectHosts("export-file", hosts)}
                 onExportToConfig={() => openSelectHosts("export-config", hosts)}
                 onToggle={toggleRemoteHost}
+                onTogglePin={toggleHostPin}
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onRefresh={(host) => void refreshRemoteHistory(host)}
                 onSendCommand={openSendCommand}

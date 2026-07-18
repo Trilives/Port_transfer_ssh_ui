@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Changed**
+- Unified the Remote Connections and Port Forwarding host headers, including pin/unpin behavior and the pinned badge.
+- Moved Delete Host into the expanded Remote Connections action row and aligned it to the far right.
+
 ## 0.3.0-beta.6
 
 **Changed**

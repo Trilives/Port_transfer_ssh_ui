@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight, Code2, FolderOpen, KeyRound, LoaderCircle, PenLine, RefreshCw, Server, Terminal, Trash2, Zap } from "lucide-react";
+import { Code2, FolderOpen, KeyRound, LoaderCircle, PenLine, RefreshCw, Terminal, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
+import { HostCardHeader } from "../components/HostCardHeader";
 import { HostTransferActions } from "../components/HostTransferActions";
 import { Button } from "../components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -20,6 +21,7 @@ function RemoteHostCard(props: {
   expanded: boolean;
   loading: boolean;
   onToggle: () => void;
+  onTogglePin: () => void;
   onDeleteHost: () => void;
   onRefresh: () => void;
   onSendCommand: () => void;
@@ -32,28 +34,21 @@ function RemoteHostCard(props: {
   const lang = props.language;
   const [customPath, setCustomPath] = useState("");
   const path = customPath.trim();
-  const endpoint = `${props.host.sshUser ? `${props.host.sshUser}@` : ""}${props.host.sshHost || "?"}:${props.host.sshPort || "22"}`;
-
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft dark:border-slate-800 dark:bg-slate-950/70">
-      <div className="flex w-full items-center gap-2 pr-4 transition hover:bg-slate-50 dark:hover:bg-slate-900">
-        <button onClick={props.onToggle} className="flex min-w-0 flex-1 items-center gap-3 px-5 py-4 text-left">
-          {props.expanded ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
-            <Server size={18} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{props.host.name}</div>
-            <div className="truncate text-xs text-slate-500 dark:text-slate-400">{endpoint}</div>
-          </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+      <HostCardHeader
+        language={lang}
+        host={props.host}
+        expanded={props.expanded}
+        accentClassName="bg-violet-600/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
+        summary={(
+          <span>
             {props.loading ? t(lang, "loading") : `${props.entries.length} ${t(lang, "remotePathsCount")}`}
           </span>
-        </button>
-        <Button variant="danger" onClick={props.onDeleteHost} aria-label={t(lang, "deleteHost")}>
-          <Trash2 size={15} />
-        </Button>
-      </div>
+        )}
+        onToggle={props.onToggle}
+        onTogglePin={props.onTogglePin}
+      />
 
       {props.expanded && (
         <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
@@ -69,6 +64,10 @@ function RemoteHostCard(props: {
             <Button variant="secondary" onClick={props.onRefresh} disabled={props.loading}>
               <RefreshCw size={15} className={props.loading ? "animate-spin" : ""} />
               {t(lang, "refreshHistory")}
+            </Button>
+            <Button variant="danger" className="ml-auto" onClick={props.onDeleteHost}>
+              <Trash2 size={15} />
+              {t(lang, "deleteHost")}
             </Button>
           </div>
 
@@ -129,6 +128,7 @@ export function RemoteConnectionsPage(props: {
   onExportToFile: () => void;
   onExportToConfig: () => void;
   onToggle: (host: Host) => void;
+  onTogglePin: (host: Host) => void;
   onDeleteHost: (host: Host) => void;
   onRefresh: (host: Host) => void;
   onSendCommand: (host: Host) => void;
@@ -168,6 +168,7 @@ export function RemoteConnectionsPage(props: {
               expanded={props.expandedIds.has(host.id)}
               loading={props.loadingIds.has(host.id)}
               onToggle={() => props.onToggle(host)}
+              onTogglePin={() => props.onTogglePin(host)}
               onDeleteHost={() => props.onDeleteHost(host)}
               onRefresh={() => props.onRefresh(host)}
               onSendCommand={() => props.onSendCommand(host)}
