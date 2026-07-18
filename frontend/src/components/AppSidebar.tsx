@@ -20,7 +20,7 @@ export function AppSidebar(props: {
   ];
 
   return (
-    <aside className="w-72 border-r border-slate-200/80 bg-white/80 p-5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60">
+    <aside className="h-full w-72 shrink-0 overflow-hidden border-r border-slate-200/80 bg-white/80 p-5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60">
       <div className="mb-8">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-soft">
           <Terminal size={22} />

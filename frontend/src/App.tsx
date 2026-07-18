@@ -456,6 +456,15 @@ export function App() {
     }
   }
 
+  async function disconnectHost(host: Host) {
+    try {
+      await api.disconnectHost(host.id);
+      await refreshHosts();
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   // ---- Key upload flow (host level) ----
   async function requestKeyUpload(host: Host) {
     setError("");
@@ -737,11 +746,11 @@ export function App() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950 transition duration-300 dark:bg-[#090d18] dark:text-slate-50">
-      <div className="flex min-h-screen">
+    <main className="h-screen overflow-hidden bg-slate-50 text-slate-950 transition duration-300 dark:bg-[#090d18] dark:text-slate-50">
+      <div className="flex h-full min-h-0">
         <AppSidebar language={language} page={page} onNavigate={setPage} />
 
-        <section className="min-w-0 flex-1 p-6">
+        <section className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
           {error && (
             <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-950 dark:bg-rose-950/40 dark:text-rose-200">
               <span className="whitespace-pre-wrap">{error}</span>
@@ -791,9 +800,15 @@ export function App() {
                 histories={remoteHistories}
                 expandedIds={remoteExpandedIds}
                 loadingIds={remoteLoadingIds}
+                onNewHost={() => setHostDialog(newHost())}
+                onImportFromFile={importFromFile}
+                onImportFromConfig={importFromConfig}
+                onExportToFile={() => openSelectHosts("export-file", hosts)}
+                onExportToConfig={() => openSelectHosts("export-config", hosts)}
                 onToggle={toggleRemoteHost}
                 onRefresh={(host) => void refreshRemoteHistory(host)}
                 onSendCommand={openSendCommand}
+                onUploadKey={requestKeyUpload}
                 onOpenTerminalEntry={(host, entry) => openTerminalPath(host, entry.label)}
                 onOpenVscodeEntry={openVscodeEntry}
                 onOpenTerminalPath={openTerminalPath}
@@ -806,22 +821,16 @@ export function App() {
                 hosts={hosts}
                 expandedIds={forwardingExpandedIds}
                 onToggle={toggleForwardingExpand}
-                onNewHost={() => setHostDialog(newHost())}
                 onEditHost={(host) => setHostDialog(host)}
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onTogglePin={toggleHostPin}
-                onSendCommand={openSendCommand}
-                onUploadKey={requestKeyUpload}
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
+                onDisconnectHost={disconnectHost}
                 onConnectForward={connectForward}
                 onDisconnectForward={disconnectForward}
                 onOpenForwardWeb={(_host, forward) => openForwardWeb(forward)}
                 onEditForward={(host, forward) => setForwardDialog({ hostId: host.id, draft: forward })}
                 onDeleteForward={deleteForward}
-                onImportFromFile={importFromFile}
-                onImportFromConfig={importFromConfig}
-                onExportToFile={() => openSelectHosts("export-file", hosts)}
-                onExportToConfig={() => openSelectHosts("export-config", hosts)}
               />
             )}
             {page === "logs" && <LogsPage language={language} logs={logs} />}

@@ -18,9 +18,11 @@ support ControlMaster multiplexing). What actually persists is each forward's ow
 flowchart TB
   subgraph FE[React Frontend]
     Dash[Home/Dashboard] --> Cur[Current connections + key events]
-    Remote[Remote Connections page] --> RemoteHostCard
+    Remote[Remote Connections page] --> HostTransferActions
+    Remote --> RemoteHostCard --> RemoteActions[Send command / Upload key / Open path]
     Forwarding[Port Forwarding page] --> HostCard --> ForwardRow
-    HostCard --> Dlg[Dialogs: Host/Forward/SendCmd/Password/KeyUpload/HostKey]
+    HostCard --> ForwardActions[New forward / Disconnect host / Edit host]
+    FE --> Dlg[Dialogs: Host/Forward/SendCmd/Password/KeyUpload/HostKey]
     LogsPage[Logs page]
     SetPage[Settings page]
     GuidePage[Guide page]
@@ -131,7 +133,7 @@ commands/          thin #[tauri::command] wrappers, one file per domain:
 App.tsx              shell: page routing, data load/refresh, all action/dialog orchestration, theme
 types.ts  api.ts  i18n.ts    shared types, IPC calls, UI copy (zh-CN/en-US)
 pages/               DashboardPage RemoteConnectionsPage PortForwardingPage LogsPage SettingsPage GuidePage
-components/          AppSidebar AppDialogs HostCard ForwardRow StatusBadge LogTable dialogs.tsx ui/*
+components/          AppSidebar AppDialogs HostTransferActions HostCard ForwardRow StatusBadge LogTable dialogs.tsx ui/*
 ```
 
 Dialogs of note in `components/dialogs/remote.tsx`: `RemoteConnectionDialog` (the per-host "Remote Connection" window — a list of
@@ -141,6 +143,8 @@ quit prompt).
 
 Data loading, polling, and all dialog state are orchestrated centrally in `App.tsx`; pages and components stay purely
 presentational (receiving data and callbacks via props). See [MODULARITY.md](MODULARITY.md) for the layering rules behind this split.
+The application shell owns viewport height: `AppSidebar` stays fixed while the right-hand page section is the only primary
+scroll container.
 
 ## 6. Tauri Commands
 

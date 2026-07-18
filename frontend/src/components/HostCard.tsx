@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, KeyRound, Pencil, Pin, PinOff, Plus, Server, Trash2, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Pin, PinOff, Plus, Power, Server, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ForwardRow } from "./ForwardRow";
 import { cn } from "../lib/utils";
@@ -10,9 +10,8 @@ export function HostCard(props: {
   host: Host;
   expanded: boolean;
   onToggle: () => void;
-  onSendCommand: () => void;
-  onUploadKey: () => void;
   onNewForward: () => void;
+  onDisconnectHost: () => void;
   onEditHost: () => void;
   onDeleteHost: () => void;
   onTogglePin: () => void;
@@ -76,17 +75,13 @@ export function HostCard(props: {
       {props.expanded && (
         <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
           <div className="mb-4 flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={props.onSendCommand}>
-              <Zap size={15} />
-              {t(lang, "sendCommand")}
-            </Button>
-            <Button variant="secondary" onClick={props.onUploadKey}>
-              <KeyRound size={15} />
-              {t(lang, "uploadKey")}
-            </Button>
             <Button onClick={props.onNewForward}>
               <Plus size={15} />
               {t(lang, "newForward")}
+            </Button>
+            <Button variant="secondary" onClick={props.onDisconnectHost} disabled={runningCount === 0}>
+              <Power size={15} />
+              {t(lang, "stopAll")}
             </Button>
             <Button variant="ghost" className="ml-auto" onClick={props.onEditHost}>
               <Pencil size={15} />

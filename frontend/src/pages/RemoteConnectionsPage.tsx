@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight, Code2, FolderOpen, LoaderCircle, PenLine, RefreshCw, Server, Terminal, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Code2, FolderOpen, KeyRound, LoaderCircle, PenLine, RefreshCw, Server, Terminal, Zap } from "lucide-react";
 import { useState } from "react";
+import { HostTransferActions } from "../components/HostTransferActions";
 import { Button } from "../components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -21,6 +22,7 @@ function RemoteHostCard(props: {
   onToggle: () => void;
   onRefresh: () => void;
   onSendCommand: () => void;
+  onUploadKey: () => void;
   onOpenTerminalEntry: (entry: HistoryEntry) => void;
   onOpenVscodeEntry: (entry: HistoryEntry) => void;
   onOpenTerminalPath: (path: string) => void;
@@ -53,6 +55,10 @@ function RemoteHostCard(props: {
             <Button variant="secondary" onClick={props.onSendCommand}>
               <Zap size={15} />
               {t(lang, "sendCommand")}
+            </Button>
+            <Button variant="secondary" onClick={props.onUploadKey}>
+              <KeyRound size={15} />
+              {t(lang, "uploadKey")}
             </Button>
             <Button variant="secondary" onClick={props.onRefresh} disabled={props.loading}>
               <RefreshCw size={15} className={props.loading ? "animate-spin" : ""} />
@@ -111,9 +117,15 @@ export function RemoteConnectionsPage(props: {
   histories: Record<string, HistoryEntry[]>;
   expandedIds: Set<string>;
   loadingIds: Set<string>;
+  onNewHost: () => void;
+  onImportFromFile: () => void;
+  onImportFromConfig: () => void;
+  onExportToFile: () => void;
+  onExportToConfig: () => void;
   onToggle: (host: Host) => void;
   onRefresh: (host: Host) => void;
   onSendCommand: (host: Host) => void;
+  onUploadKey: (host: Host) => void;
   onOpenTerminalEntry: (host: Host, entry: HistoryEntry) => void;
   onOpenVscodeEntry: (host: Host, entry: HistoryEntry) => void;
   onOpenTerminalPath: (host: Host, path: string) => void;
@@ -122,9 +134,19 @@ export function RemoteConnectionsPage(props: {
   const lang = props.language;
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t(lang, "remoteConnectionsTitle")}</CardTitle>
-        <CardDescription>{t(lang, "remoteConnectionsDesc")}</CardDescription>
+      <CardHeader className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-[16rem] flex-1 space-y-1">
+          <CardTitle>{t(lang, "remoteConnectionsTitle")}</CardTitle>
+          <CardDescription>{t(lang, "remoteConnectionsDesc")}</CardDescription>
+        </div>
+        <HostTransferActions
+          language={lang}
+          onNewHost={props.onNewHost}
+          onImportFromFile={props.onImportFromFile}
+          onImportFromConfig={props.onImportFromConfig}
+          onExportToFile={props.onExportToFile}
+          onExportToConfig={props.onExportToConfig}
+        />
       </CardHeader>
       {props.hosts.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400 dark:border-slate-800 dark:text-slate-500">{t(lang, "noHosts")}</p>
@@ -141,6 +163,7 @@ export function RemoteConnectionsPage(props: {
               onToggle={() => props.onToggle(host)}
               onRefresh={() => props.onRefresh(host)}
               onSendCommand={() => props.onSendCommand(host)}
+              onUploadKey={() => props.onUploadKey(host)}
               onOpenTerminalEntry={(entry) => props.onOpenTerminalEntry(host, entry)}
               onOpenVscodeEntry={(entry) => props.onOpenVscodeEntry(host, entry)}
               onOpenTerminalPath={(path) => props.onOpenTerminalPath(host, path)}
