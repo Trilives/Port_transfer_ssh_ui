@@ -5,18 +5,21 @@
 :root {
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
   color: #0f172a;
-  background: #f6f8fb;
+  background: transparent;
 }
 
 html.dark {
   color: #f8fafc;
-  background: #090d18;
+  background: transparent;
 }
 
-body {
+html,
+body,
+#root {
   margin: 0;
   min-width: 960px;
   min-height: 100vh;
+  background: transparent;
 }
 
 * {

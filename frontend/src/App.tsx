@@ -746,7 +746,7 @@ export function App() {
   };
 
   return (
-    <main className="h-screen overflow-hidden bg-slate-50 text-slate-950 transition duration-300 dark:bg-[#090d18] dark:text-slate-50">
+    <main className="h-screen overflow-hidden bg-slate-50/90 text-slate-950 backdrop-blur-xl transition duration-300 dark:bg-[#090d18]/90 dark:text-slate-50">
       <div className="flex h-full min-h-0">
         <AppSidebar language={language} page={page} onNavigate={setPage} />
 

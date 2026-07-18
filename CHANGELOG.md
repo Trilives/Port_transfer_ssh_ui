@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+**Changed**
+- Applied the native Windows Mica backdrop with a translucent app surface while retaining the standard title bar, resizing, and system window controls.
+
 ## 0.3.0-beta.5
 
 **Fixed**
