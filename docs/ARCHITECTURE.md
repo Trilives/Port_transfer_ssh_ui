@@ -45,7 +45,7 @@ flowchart TB
 - Desktop app shell and native backend: Tauri 2 + Rust
 - Frontend UI: React + TypeScript + Tailwind CSS, local shadcn/ui-style components
 - Forward execution: Rust calls the system `ssh`; the external terminal opens a PowerShell console running interactive `ssh`
-- Target platform: **Windows only**. Packaging produces an NSIS installer, built by `.github/workflows/build.yml`.
+- Target platform: **Windows only**. Packaging produces an NSIS installer with a Simplified Chinese / English selector and a changeable install directory, built by `.github/workflows/build.yml`.
   The backend calls Windows tooling directly (`powershell`, `netstat`/`tasklist`, `Add-WindowsCapability`, the registry)
 
 ## 3. Getting Started

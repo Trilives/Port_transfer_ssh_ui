@@ -50,6 +50,8 @@ Download `v0.3.0` from GitHub Releases:
 - Recommended installer: `SSHDeck_0.3.0_x64-setup.exe`
 - Install-free ZIP: `SSHDeck_0.3.0_x64-portable.zip` — extract it, then run `SSHDeck.exe` directly.
 
+When launched directly, the installer first offers a Simplified Chinese / English language selector, then shows the standard setup wizard where you can keep or change the installation folder. In-app upgrades keep the existing installation folder and replace the installed version in place.
+
 The portable package stores settings and hosts in `%LOCALAPPDATA%\SSHDeck\data`, not beside the executable. It requires Windows OpenSSH Client and Microsoft Edge WebView2 Runtime. To remain install-free, update it by downloading a newer portable ZIP; the in-app updater follows the installer update path.
 
 > Upgrading from beta.4 or earlier: export your hosts before updating, then import them in v0.3.0. The old data directory is not migrated automatically.

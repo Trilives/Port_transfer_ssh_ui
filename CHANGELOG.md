@@ -11,6 +11,7 @@
 - Unified host headers across both management pages, moved Delete Host to the far right of the expanded Remote Connections action row, and kept the sidebar fixed while only page content scrolls.
 - Applied the native Windows Mica backdrop and replaced page-top operation messages with five-second floating toasts.
 - Moved per-user data to `%LOCALAPPDATA%\SSHDeck\data` and refreshed the English/Chinese multi-page README previews.
+- Made the NSIS installer language selector and current-user installation mode explicit; fresh setup allows changing the installation directory while in-app upgrades retain it and replace the existing installation in place.
 
 **Fixed**
 - One-off SSH commands run on a blocking worker so the interface remains responsive while remote commands execute.
