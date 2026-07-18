@@ -7,7 +7,7 @@
 - Signed in-app updates with Stable and Preview channels, plus an install-free Windows portable ZIP published beside the installer.
 
 **Changed**
-- Consolidated New Host, import/export, command, key upload, host deletion, and pin/unpin controls under Remote Connections while keeping forwarding-specific actions on Port Forwarding.
+- Consolidated New Host, import/export, command, key upload, host editing/deletion, and pin/unpin controls under Remote Connections while keeping forwarding-specific actions on Port Forwarding.
 - Unified host headers across both management pages, moved Delete Host to the far right of the expanded Remote Connections action row, and kept the sidebar fixed while only page content scrolls.
 - Applied the native Windows Mica backdrop and replaced page-top operation messages with five-second floating toasts.
 - Moved per-user data to `%LOCALAPPDATA%\SSHDeck\data` and refreshed the English/Chinese multi-page README previews.

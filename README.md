@@ -21,7 +21,7 @@ Click either preview to open the original 1440×900 image.
 - **Host-centric, two-level structure**: a host (connection parameters) is the top level, and a port forward (bind/target parameters) is the second level — click a host to expand it.
 - Supports Local, Remote, and Dynamic SOCKS forwarding modes.
 - Each forward connects/disconnects independently; you can disconnect a whole host or everything, with keep-alive auto-reconnect.
-- **Dedicated Remote Connections and Port Forwarding pages**: both pages are grouped by host. Expanding a host on Remote Connections shows its historical remote paths; expanding one on Port Forwarding shows its current forward configuration and controls.
+- **Dedicated Remote Connections and Port Forwarding pages**: both pages are grouped by host. Remote Connections centralizes host creation, editing, deletion, pinning, import/export, and historical remote paths; Port Forwarding focuses only on current forwarding configuration and connection controls.
 - **Open in browser**: a running forward can be opened in your default browser at its listening port (`http://<bind host>:<local port>`, with `0.0.0.0` treated as `127.0.0.1`) — available on both the Home and Port Forwarding pages; most useful for Local forwards.
 - **Send command**: run a single command on the host over SSH, with output shown in a dialog; works passwordless or with a one-time password.
 - **Open terminal**: launches an external PowerShell window already connected to the server over SSH, with Tab completion.

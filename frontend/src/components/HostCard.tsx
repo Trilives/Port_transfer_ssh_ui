@@ -1,4 +1,4 @@
-import { Pencil, Plus, Power } from "lucide-react";
+import { Plus, Power } from "lucide-react";
 import { Button } from "./ui/button";
 import { ForwardRow } from "./ForwardRow";
 import { HostCardHeader } from "./HostCardHeader";
@@ -13,7 +13,6 @@ export function HostCard(props: {
   onToggle: () => void;
   onNewForward: () => void;
   onDisconnectHost: () => void;
-  onEditHost: () => void;
   onTogglePin: () => void;
   onConnectForward: (forward: Forward) => void;
   onDisconnectForward: (forward: Forward) => void;
@@ -55,10 +54,6 @@ export function HostCard(props: {
             <Button variant="secondary" onClick={props.onDisconnectHost} disabled={runningCount === 0}>
               <Power size={15} />
               {t(lang, "stopAll")}
-            </Button>
-            <Button variant="ghost" className="ml-auto" onClick={props.onEditHost}>
-              <Pencil size={15} />
-              {t(lang, "editHost")}
             </Button>
           </div>
 

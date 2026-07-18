@@ -790,6 +790,7 @@ export function App() {
                 onExportToConfig={() => openSelectHosts("export-config", hosts)}
                 onToggle={toggleRemoteHost}
                 onTogglePin={toggleHostPin}
+                onEditHost={(host) => setHostDialog(host)}
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onRefresh={(host) => void refreshRemoteHistory(host)}
                 onSendCommand={openSendCommand}
@@ -806,7 +807,6 @@ export function App() {
                 hosts={hosts}
                 expandedIds={forwardingExpandedIds}
                 onToggle={toggleForwardingExpand}
-                onEditHost={(host) => setHostDialog(host)}
                 onTogglePin={toggleHostPin}
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
                 onDisconnectHost={disconnectHost}

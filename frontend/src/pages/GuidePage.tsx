@@ -8,12 +8,12 @@ export function GuidePage(props: { language: Language }) {
 
   const quickSteps = isZh
     ? [
-        ["1", "新建主机", "在「配置」页点击「新建主机」，只填 SSH 主机、用户、端口和密钥文件。"],
+        ["1", "新建主机", "在「远程连接」页点击「新建主机」，只填 SSH 主机、用户、端口和密钥文件。"],
         ["2", "新建端口转发", "展开主机卡片，点击「新建端口转发」，填写监听与目标参数。"],
         ["3", "连接", "在转发上点击「连接」，程序自动判断免密或弹密码框，运行状态在「主页」查看。"],
       ]
     : [
-        ["1", "New Host", "On Config, click \"New Host\" and fill only SSH host, user, port, and key file."],
+        ["1", "New Host", "On Remote Connections, click \"New Host\" and fill only SSH host, user, port, and key file."],
         ["2", "New Forward", "Expand the host card and click \"New Forward\" to fill bind and target parameters."],
         ["3", "Connect", "Click Connect on a forward; the app auto-detects key auth or prompts for a password. Watch status on Home."],
       ];
@@ -41,13 +41,15 @@ export function GuidePage(props: { language: Language }) {
   const pageCards = isZh
     ? [
         ["主页", "监控板：完整展示当前运行中的转发，以及连接/断开/错误等关键事件。只读，不在这里改配置。"],
-        ["配置", "主机（一级）与端口转发（二级）的管理中心。新建/编辑/删除、连接/断开、发送指令、终端、上传密钥都在这里。"],
+        ["远程连接", "集中管理主机：新建、编辑、删除、置顶、发送指令、上传密钥，并用终端或 VS Code 打开远端路径。"],
+        ["端口转发", "按主机管理 Local、Remote 与 Dynamic 转发，包括新建、编辑、删除、连接和断开。"],
         ["日志", "完整运行日志，按设置中的等级过滤。排查连接失败时把等级调到 debug。"],
         ["设置", "主题（浅色/深色）、语言、日志等级。选项会随界面语言切换，默认浅色。"],
       ]
     : [
         ["Home", "Dashboard: shows all running forwards plus key connect/disconnect/error events. Read-only."],
-        ["Config", "The hub for hosts (level 1) and forwards (level 2): create/edit/delete, connect, send command, terminal, upload key."],
+        ["Remote Connections", "Manage hosts in one place: create, edit, delete, pin, send commands, upload keys, and open remote paths in a terminal or VS Code."],
+        ["Port Forwarding", "Manage Local, Remote, and Dynamic forwards by host, including create, edit, delete, connect, and disconnect."],
         ["Logs", "Full runtime logs filtered by the level in Settings. Use debug to troubleshoot connection failures."],
         ["Settings", "Theme (light/dark), language, log level. Options follow the UI language; default is light."],
       ];

@@ -1,4 +1,4 @@
-import { Code2, FolderOpen, KeyRound, LoaderCircle, PenLine, RefreshCw, Terminal, Trash2, Zap } from "lucide-react";
+import { Code2, FolderOpen, KeyRound, LoaderCircle, Pencil, PenLine, RefreshCw, Terminal, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { HostCardHeader } from "../components/HostCardHeader";
 import { HostTransferActions } from "../components/HostTransferActions";
@@ -22,6 +22,7 @@ function RemoteHostCard(props: {
   loading: boolean;
   onToggle: () => void;
   onTogglePin: () => void;
+  onEditHost: () => void;
   onDeleteHost: () => void;
   onRefresh: () => void;
   onSendCommand: () => void;
@@ -65,7 +66,11 @@ function RemoteHostCard(props: {
               <RefreshCw size={15} className={props.loading ? "animate-spin" : ""} />
               {t(lang, "refreshHistory")}
             </Button>
-            <Button variant="danger" className="ml-auto" onClick={props.onDeleteHost}>
+            <Button variant="ghost" className="ml-auto" onClick={props.onEditHost}>
+              <Pencil size={15} />
+              {t(lang, "editHost")}
+            </Button>
+            <Button variant="danger" onClick={props.onDeleteHost}>
               <Trash2 size={15} />
               {t(lang, "deleteHost")}
             </Button>
@@ -129,6 +134,7 @@ export function RemoteConnectionsPage(props: {
   onExportToConfig: () => void;
   onToggle: (host: Host) => void;
   onTogglePin: (host: Host) => void;
+  onEditHost: (host: Host) => void;
   onDeleteHost: (host: Host) => void;
   onRefresh: (host: Host) => void;
   onSendCommand: (host: Host) => void;
@@ -169,6 +175,7 @@ export function RemoteConnectionsPage(props: {
               loading={props.loadingIds.has(host.id)}
               onToggle={() => props.onToggle(host)}
               onTogglePin={() => props.onTogglePin(host)}
+              onEditHost={() => props.onEditHost(host)}
               onDeleteHost={() => props.onDeleteHost(host)}
               onRefresh={() => props.onRefresh(host)}
               onSendCommand={() => props.onSendCommand(host)}
