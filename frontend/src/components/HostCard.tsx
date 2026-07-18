@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, KeyRound, Pencil, Pin, PinOff, Plug, Plus, Server, Trash2, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, Pencil, Pin, PinOff, Plus, Server, Trash2, Zap } from "lucide-react";
 import { Button } from "./ui/button";
 import { ForwardRow } from "./ForwardRow";
 import { cn } from "../lib/utils";
@@ -11,7 +11,6 @@ export function HostCard(props: {
   expanded: boolean;
   onToggle: () => void;
   onSendCommand: () => void;
-  onOpenRemoteConnection: () => void;
   onUploadKey: () => void;
   onNewForward: () => void;
   onEditHost: () => void;
@@ -31,7 +30,7 @@ export function HostCard(props: {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft dark:border-slate-800 dark:bg-slate-950/70">
       <div className="flex w-full items-center gap-2 pr-4 transition hover:bg-slate-50 dark:hover:bg-slate-900">
-        <button onClick={props.onToggle} className="flex flex-1 items-center gap-3 px-5 py-4 text-left">
+        <button onClick={props.onToggle} className="flex min-w-0 flex-1 items-center gap-3 px-5 py-4 text-left">
           {props.expanded ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
             <Server size={18} />
@@ -80,10 +79,6 @@ export function HostCard(props: {
             <Button variant="secondary" onClick={props.onSendCommand}>
               <Zap size={15} />
               {t(lang, "sendCommand")}
-            </Button>
-            <Button variant="secondary" onClick={props.onOpenRemoteConnection}>
-              <Plug size={15} />
-              {t(lang, "remoteConnection")}
             </Button>
             <Button variant="secondary" onClick={props.onUploadKey}>
               <KeyRound size={15} />

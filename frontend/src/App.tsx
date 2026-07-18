@@ -1,36 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
-import { Activity, BookOpen, ScrollText, Server, Settings as SettingsIcon, Terminal } from "lucide-react";
 import { api } from "./api";
-import { cn, forwardWebUrl } from "./lib/utils";
+import { forwardWebUrl } from "./lib/utils";
 import { t } from "./i18n";
-import {
-  CloseBehaviorDialog,
-  ConfirmDialog,
-  ConnectionErrorDialog,
-  CriticalErrorDialog,
-  ForwardDialog,
-  HostDialog,
-  HostKeyChangedDialog,
-  ImportConflictDialog,
-  InputPasswordDialog,
-  KeyUploadDialog,
-  PasswordDialog,
-  RemoteConnectionDialog,
-  SelectHostsDialog,
-  SendCommandDialog,
-  SshMissingDialog,
-  VscodeMissingDialog,
-} from "./components/dialogs";
+import { AppSidebar, type AppPage } from "./components/AppSidebar";
+import { AppDialogs } from "./components/AppDialogs";
 import { DashboardPage } from "./pages/DashboardPage";
-import { ConfigPage } from "./pages/ConfigPage";
+import { PortForwardingPage } from "./pages/PortForwardingPage";
+import { RemoteConnectionsPage } from "./pages/RemoteConnectionsPage";
 import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { GuidePage } from "./pages/GuidePage";
 import type { AppSettings, CriticalErrorPayload, Forward, HistoryEntry, Host, LogEntry, LogLevel, UpdateChannel, UpdateState } from "./types";
-
-type Page = "dashboard" | "config" | "logs" | "settings" | "guide";
 
 const defaultSettings: AppSettings = { theme: "light", language: "zh-CN", logLevel: "info", closeBehavior: "ask", autoUpdate: false, updateChannel: "stable" };
 
@@ -59,13 +41,16 @@ const newForward = (): Forward => ({
 });
 
 export function App() {
-  const [page, setPage] = useState<Page>("dashboard");
+  const [page, setPage] = useState<AppPage>("dashboard");
   const [hosts, setHosts] = useState<Host[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [forwardingExpandedIds, setForwardingExpandedIds] = useState<Set<string>>(new Set());
+  const [remoteExpandedIds, setRemoteExpandedIds] = useState<Set<string>>(new Set());
+  const [remoteHistories, setRemoteHistories] = useState<Record<string, HistoryEntry[]>>({});
+  const [remoteLoadingIds, setRemoteLoadingIds] = useState<Set<string>>(new Set());
 
   // Dialogs
   const [hostDialog, setHostDialog] = useState<Host | null>(null);
@@ -74,6 +59,7 @@ export function App() {
   const [command, setCommand] = useState("");
   const [commandOutput, setCommandOutput] = useState("");
   const [commandBusy, setCommandBusy] = useState(false);
+  const commandRunId = useRef(0);
   const [sendCmdPwOpen, setSendCmdPwOpen] = useState(false);
   const [sendCmdPwValue, setSendCmdPwValue] = useState("");
   const [passwordTarget, setPasswordTarget] = useState<{ host: Host; forward: Forward } | null>(null);
@@ -119,9 +105,9 @@ export function App() {
     document.documentElement.classList.toggle("dark", settings.theme === "dark");
   }, [settings.theme]);
 
-  // Idle timer only runs on the Config page with no dialog open: 3 minutes of no activity jumps back to Home.
+  // Idle timer only runs on the Port Forwarding page with no dialog open: 3 minutes of no activity jumps back to Home.
   useEffect(() => {
-    if (page !== "config" || modalOpen) return;
+    if (page !== "forwarding" || modalOpen) return;
     let timer = 0;
     const reset = () => {
       window.clearTimeout(timer);
@@ -229,8 +215,8 @@ export function App() {
     }
   }
 
-  function toggleExpand(hostId: string) {
-    setExpandedIds((prev) => {
+  function toggleForwardingExpand(hostId: string) {
+    setForwardingExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(hostId)) next.delete(hostId);
       else next.add(hostId);
@@ -238,8 +224,35 @@ export function App() {
     });
   }
 
+  async function refreshRemoteHistory(host: Host) {
+    setRemoteLoadingIds((prev) => new Set(prev).add(host.id));
+    try {
+      const entries = (await api.listHistory(host.id)).filter((entry) => entry.kind === "vscode");
+      setRemoteHistories((prev) => ({ ...prev, [host.id]: entries }));
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setRemoteLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(host.id);
+        return next;
+      });
+    }
+  }
+
+  function toggleRemoteHost(host: Host) {
+    const opening = !remoteExpandedIds.has(host.id);
+    setRemoteExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(host.id)) next.delete(host.id);
+      else next.add(host.id);
+      return next;
+    });
+    if (opening) void refreshRemoteHistory(host);
+  }
+
   function expand(hostId: string) {
-    setExpandedIds((prev) => new Set(prev).add(hostId));
+    setForwardingExpandedIds((prev) => new Set(prev).add(hostId));
   }
 
   // ---- Host CRUD ----
@@ -511,39 +524,57 @@ export function App() {
   // ---- Send command ----
   async function runSendCommand() {
     if (!sendCmd || !command.trim()) return;
+    const runId = ++commandRunId.current;
+    const target = sendCmd;
+    const remoteCommand = command;
     setCommandBusy(true);
     setCommandOutput("");
     try {
-      setCommandOutput(await api.sendCommand(sendCmd.hostId, command));
+      const output = await api.sendCommand(target.hostId, remoteCommand);
+      if (commandRunId.current === runId) setCommandOutput(output);
     } catch (err) {
-      setCommandOutput(String(err));
+      if (commandRunId.current === runId) setCommandOutput(String(err));
     } finally {
-      setCommandBusy(false);
+      if (commandRunId.current === runId) setCommandBusy(false);
     }
   }
 
   async function runSendCommandWithPassword() {
     if (!sendCmd || !command.trim() || !sendCmdPwValue) return;
     const password = sendCmdPwValue;
+    const runId = ++commandRunId.current;
+    const target = sendCmd;
+    const remoteCommand = command;
     setSendCmdPwOpen(false);
     setSendCmdPwValue("");
     setCommandBusy(true);
     setCommandOutput("");
     try {
-      setCommandOutput(await api.sendCommandWithPassword(sendCmd.hostId, command, password));
+      const output = await api.sendCommandWithPassword(target.hostId, remoteCommand, password);
+      if (commandRunId.current === runId) setCommandOutput(output);
     } catch (err) {
-      setCommandOutput(String(err));
+      if (commandRunId.current === runId) setCommandOutput(String(err));
     } finally {
-      setCommandBusy(false);
+      if (commandRunId.current === runId) setCommandBusy(false);
     }
   }
 
   function openSendCommand(host: Host) {
+    commandRunId.current += 1;
     setSendCmd({ hostId: host.id, hostName: host.name });
     setCommand("");
     setCommandOutput("");
     setSendCmdPwOpen(false);
     setSendCmdPwValue("");
+    setCommandBusy(false);
+  }
+
+  function closeSendCommand() {
+    commandRunId.current += 1;
+    setSendCmd(null);
+    setSendCmdPwOpen(false);
+    setSendCmdPwValue("");
+    setCommandBusy(false);
   }
 
   async function openForwardWeb(forward: Forward) {
@@ -691,45 +722,26 @@ export function App() {
     }
   }
 
-  const nav = [
-    { id: "dashboard" as const, label: t(language, "dashboard"), icon: Activity },
-    { id: "config" as const, label: t(language, "config"), icon: Server },
-    { id: "logs" as const, label: t(language, "logs"), icon: ScrollText },
-    { id: "settings" as const, label: t(language, "settings"), icon: SettingsIcon },
-    { id: "guide" as const, label: t(language, "guide"), icon: BookOpen },
-  ];
+  const dialogProps = {
+    language, hostDialog, setHostDialog, saveHost, forwardDialog, setForwardDialog, saveForward,
+    sendCmd, command, setCommand, commandOutput, commandBusy, closeSendCommand, runSendCommand,
+    sendCmdPwOpen, setSendCmdPwOpen, sendCmdPwValue, setSendCmdPwValue, runSendCommandWithPassword,
+    passwordTarget, setPasswordTarget, passwordValue, setPasswordValue, connectWithPassword,
+    keyUploadTarget, setKeyUploadTarget, keyUploadPassword, setKeyUploadPassword, uploadKeyWithPassword,
+    hostKeyTarget, setHostKeyTarget, hostKeyFingerprint, hostKeyFetching, trustHostKeyAndRetry,
+    criticalError, setCriticalError, connectError, setConnectError, selectHosts, setSelectHosts,
+    toggleSelectHost, confirmSelectHosts, importConflict, setImportConflict, applyImportStrategy,
+    deleteHostTarget, setDeleteHostTarget, confirmDeleteHost, sshMissing, setSshMissing, installSsh,
+    historyDialog, setHistoryDialog, openTerminalPath, openVscodeEntry, openVscodePath,
+    vscodeMissing, setVscodeMissing, closePrompt, setClosePrompt, minimizeToTray, exitApp,
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950 transition duration-300 dark:bg-[#090d18] dark:text-slate-50">
       <div className="flex min-h-screen">
-        <aside className="w-72 border-r border-slate-200/80 bg-white/80 p-5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60">
-          <div className="mb-8">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-soft">
-              <Terminal size={22} />
-            </div>
-            <h1 className="mt-4 text-2xl font-semibold tracking-normal">{t(language, "title")}</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{t(language, "subtitle")}</p>
-          </div>
-          <nav className="space-y-2">
-            {nav.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setPage(item.id)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition duration-200",
-                  page === item.id
-                    ? "bg-blue-600 text-white shadow-soft"
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-900",
-                )}
-              >
-                <item.icon size={18} />
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
+        <AppSidebar language={language} page={page} onNavigate={setPage} />
 
-        <section className="flex-1 p-6">
+        <section className="min-w-0 flex-1 p-6">
           {error && (
             <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-950 dark:bg-rose-950/40 dark:text-rose-200">
               <span className="whitespace-pre-wrap">{error}</span>
@@ -760,7 +772,7 @@ export function App() {
                 hosts={hosts}
                 logs={logs}
                 onNew={() => {
-                  setPage("config");
+                  setPage("forwarding");
                   setHostDialog(newHost());
                 }}
                 onStopAll={async () => {
@@ -772,18 +784,33 @@ export function App() {
                 onOpenRemoteConnection={openRemoteConnection}
               />
             )}
-            {page === "config" && (
-              <ConfigPage
+            {page === "remote" && (
+              <RemoteConnectionsPage
                 language={language}
                 hosts={hosts}
-                expandedIds={expandedIds}
-                onToggle={toggleExpand}
+                histories={remoteHistories}
+                expandedIds={remoteExpandedIds}
+                loadingIds={remoteLoadingIds}
+                onToggle={toggleRemoteHost}
+                onRefresh={(host) => void refreshRemoteHistory(host)}
+                onSendCommand={openSendCommand}
+                onOpenTerminalEntry={(host, entry) => openTerminalPath(host, entry.label)}
+                onOpenVscodeEntry={openVscodeEntry}
+                onOpenTerminalPath={openTerminalPath}
+                onOpenVscodePath={openVscodePath}
+              />
+            )}
+            {page === "forwarding" && (
+              <PortForwardingPage
+                language={language}
+                hosts={hosts}
+                expandedIds={forwardingExpandedIds}
+                onToggle={toggleForwardingExpand}
                 onNewHost={() => setHostDialog(newHost())}
                 onEditHost={(host) => setHostDialog(host)}
                 onDeleteHost={(host) => setDeleteHostTarget(host)}
                 onTogglePin={toggleHostPin}
                 onSendCommand={openSendCommand}
-                onOpenRemoteConnection={openRemoteConnection}
                 onUploadKey={requestKeyUpload}
                 onNewForward={(host) => setForwardDialog({ hostId: host.id, draft: newForward() })}
                 onConnectForward={connectForward}
@@ -813,162 +840,7 @@ export function App() {
         </section>
       </div>
 
-      {hostDialog && (
-        <HostDialog
-          language={language}
-          draft={hostDialog}
-          setDraft={setHostDialog}
-          onClose={() => setHostDialog(null)}
-          onSave={saveHost}
-        />
-      )}
-      {forwardDialog && (
-        <ForwardDialog
-          language={language}
-          draft={forwardDialog.draft}
-          setDraft={(draft) => setForwardDialog({ ...forwardDialog, draft })}
-          onClose={() => setForwardDialog(null)}
-          onSave={saveForward}
-        />
-      )}
-      {sendCmd && (
-        <SendCommandDialog
-          language={language}
-          hostName={sendCmd.hostName}
-          command={command}
-          setCommand={setCommand}
-          output={commandOutput}
-          busy={commandBusy}
-          onClose={() => {
-            setSendCmd(null);
-            setSendCmdPwOpen(false);
-            setSendCmdPwValue("");
-          }}
-          onRun={runSendCommand}
-          onRunWithPassword={() => {
-            setSendCmdPwValue("");
-            setSendCmdPwOpen(true);
-          }}
-        />
-      )}
-      {sendCmd && sendCmdPwOpen && (
-        <InputPasswordDialog
-          language={language}
-          title={t(language, "sendWithPassword")}
-          description={sendCmd.hostName}
-          submitLabel={t(language, "run")}
-          password={sendCmdPwValue}
-          setPassword={setSendCmdPwValue}
-          onCancel={() => {
-            setSendCmdPwOpen(false);
-            setSendCmdPwValue("");
-          }}
-          onSubmit={runSendCommandWithPassword}
-        />
-      )}
-      {passwordTarget && (
-        <PasswordDialog
-          language={language}
-          targetName={`${passwordTarget.host.name} / ${passwordTarget.forward.name}`}
-          password={passwordValue}
-          setPassword={setPasswordValue}
-          onCancel={() => {
-            setPasswordTarget(null);
-            setPasswordValue("");
-          }}
-          onSubmit={connectWithPassword}
-        />
-      )}
-      {keyUploadTarget && (
-        <KeyUploadDialog
-          language={language}
-          hostName={keyUploadTarget.name}
-          password={keyUploadPassword}
-          setPassword={setKeyUploadPassword}
-          onCancel={() => {
-            setKeyUploadTarget(null);
-            setKeyUploadPassword("");
-          }}
-          onSubmit={uploadKeyWithPassword}
-        />
-      )}
-      {hostKeyTarget && (
-        <HostKeyChangedDialog
-          language={language}
-          hostName={hostKeyTarget.host.name}
-          fingerprint={hostKeyFingerprint}
-          fetching={hostKeyFetching}
-          onCancel={() => setHostKeyTarget(null)}
-          onTrust={trustHostKeyAndRetry}
-        />
-      )}
-      {criticalError && (
-        <CriticalErrorDialog language={language} error={criticalError} onClose={() => setCriticalError(null)} />
-      )}
-      {connectError && (
-        <ConnectionErrorDialog language={language} message={connectError} onClose={() => setConnectError(null)} />
-      )}
-      {selectHosts && (
-        <SelectHostsDialog
-          language={language}
-          title={t(language, selectHosts.mode === "import" ? "selectHostsToImport" : "selectHostsToExport")}
-          confirmLabel={t(language, selectHosts.mode === "import" ? "confirmImport" : "confirmExport")}
-          items={selectHosts.items.map((h) => ({ id: h.id, name: h.name, sshHost: h.sshHost }))}
-          selected={selectHosts.selected}
-          onToggle={toggleSelectHost}
-          onSelectAll={() => setSelectHosts((prev) => (prev ? { ...prev, selected: new Set(prev.items.map((h) => h.id)) } : prev))}
-          onClearAll={() => setSelectHosts((prev) => (prev ? { ...prev, selected: new Set() } : prev))}
-          onCancel={() => setSelectHosts(null)}
-          onConfirm={confirmSelectHosts}
-        />
-      )}
-      {importConflict && (
-        <ImportConflictDialog
-          language={language}
-          duplicates={importConflict.duplicates}
-          description={importConflict.mode === "export-config" ? t(language, "exportConfigConflictDesc") : undefined}
-          onCancel={() => setImportConflict(null)}
-          onOverwrite={() => applyImportStrategy("overwrite")}
-          onSkip={() => applyImportStrategy("skip")}
-        />
-      )}
-      {deleteHostTarget && (
-        <ConfirmDialog
-          language={language}
-          title={t(language, "confirmDeleteHostTitle")}
-          description={`${deleteHostTarget.name} — ${t(language, "confirmDeleteHostDesc")}`}
-          confirmLabel={t(language, "delete")}
-          onCancel={() => setDeleteHostTarget(null)}
-          onConfirm={confirmDeleteHost}
-        />
-      )}
-      {sshMissing && (
-        <SshMissingDialog language={language} onCancel={() => setSshMissing(false)} onInstall={installSsh} />
-      )}
-      {historyDialog && (
-        <RemoteConnectionDialog
-          language={language}
-          hostName={historyDialog.host.name}
-          entries={historyDialog.entries}
-          onOpenTerminalEntry={(entry) => openTerminalPath(historyDialog.host, entry.label)}
-          onOpenVscodeEntry={(entry) => openVscodeEntry(historyDialog.host, entry)}
-          onOpenTerminalPath={(path) => openTerminalPath(historyDialog.host, path)}
-          onOpenVscodePath={(path) => openVscodePath(historyDialog.host, path)}
-          onCancel={() => setHistoryDialog(null)}
-        />
-      )}
-      {vscodeMissing && (
-        <VscodeMissingDialog language={language} kind={vscodeMissing} onClose={() => setVscodeMissing(null)} />
-      )}
-      {closePrompt && (
-        <CloseBehaviorDialog
-          language={language}
-          active={closePrompt.active}
-          onMinimize={minimizeToTray}
-          onExit={exitApp}
-          onCancel={() => setClosePrompt(null)}
-        />
-      )}
+      <AppDialogs {...dialogProps} />
     </main>
   );
 }

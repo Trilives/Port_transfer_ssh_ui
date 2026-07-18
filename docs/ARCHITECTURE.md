@@ -18,7 +18,8 @@ support ControlMaster multiplexing). What actually persists is each forward's ow
 flowchart TB
   subgraph FE[React Frontend]
     Dash[Home/Dashboard] --> Cur[Current connections + key events]
-    Cfg[Config page] --> HostCard --> ForwardRow
+    Remote[Remote Connections page] --> RemoteHostCard
+    Forwarding[Port Forwarding page] --> HostCard --> ForwardRow
     HostCard --> Dlg[Dialogs: Host/Forward/SendCmd/Password/KeyUpload/HostKey]
     LogsPage[Logs page]
     SetPage[Settings page]
@@ -113,6 +114,7 @@ history.rs         open-history pure logic: upsert/dedup, merge scanned VS Code 
 terminal.rs        open_terminal: launches an external PowerShell window running ssh (optionally `cd`'d into a remote path)
 ssh/
   command.rs       build_ssh / build_probe / build_key_upload / build_send command construction
+  exec.rs          blocking one-off SSH execution + stdout/stderr merge (called via spawn_blocking)
   diagnose.rs      classify_ssh_failure: classify unreachable/auth/etc. failures from stderr, with localized reasons
   process.rs       start/stop/watch/cleanup tunnel, CREATE_NO_WINDOW, askpass helper
   probe.rs         probe_connection / get_host_fingerprint / remove_known_host
@@ -126,13 +128,13 @@ commands/          thin #[tauri::command] wrappers, one file per domain:
 ### Frontend `frontend/src/`
 
 ```text
-App.tsx              shell: navigation, page routing, data load/refresh, all action/dialog orchestration, theme
+App.tsx              shell: page routing, data load/refresh, all action/dialog orchestration, theme
 types.ts  api.ts  i18n.ts    shared types, IPC calls, UI copy (zh-CN/en-US)
-pages/               DashboardPage ConfigPage LogsPage SettingsPage GuidePage
-components/          HostCard ForwardRow StatusBadge LogTable dialogs.tsx ui/*
+pages/               DashboardPage RemoteConnectionsPage PortForwardingPage LogsPage SettingsPage GuidePage
+components/          AppSidebar AppDialogs HostCard ForwardRow StatusBadge LogTable dialogs.tsx ui/*
 ```
 
-Dialogs of note in `dialogs.tsx`: `RemoteConnectionDialog` (the per-host "Remote Connection" window — a list of
+Dialogs of note in `components/dialogs/remote.tsx`: `RemoteConnectionDialog` (the per-host "Remote Connection" window — a list of
 remote paths from VS Code Remote-SSH history, each openable in a terminal `cd`'d into it or in VS Code, plus a
 retained manual path field with Terminal / VS Code buttons), and `CloseBehaviorDialog` (the minimize-to-tray vs
 quit prompt).
@@ -147,7 +149,7 @@ presentational (receiving data and callbacks via props). See [MODULARITY.md](MOD
 | Host | `list_hosts` `save_host` `set_host_pinned` `delete_host` | `save_host` rejects non-ASCII/space `sshHost`; other usability is checked at connect time; `delete_host` disconnects its forwards first |
 | Import/export | `read_import_file` `read_import_ssh_config` `import_hosts` `export_hosts_to_file` `export_hosts_to_ssh_config` | dedup by sshHost/IP; strategy `""` detects conflicts, `overwrite`, or `skip` |
 | Forward | `save_forward` `delete_forward` `connect_forward[_with_password]` `disconnect_forward` `disconnect_host` `disconnect_all` | connect probes first; port-in-use is only checked at connect time |
-| Command/Terminal | `send_command` `open_terminal` `open_url` | `open_terminal(hostId, path?)` — a non-empty `path` opens the shell `cd`'d into that remote dir; `open_url` opens http/https in the default browser (the "Open in browser" button) |
+| Command/Terminal | `send_command` `open_terminal` `open_url` | `send_command` runs blocking SSH work through the async runtime's blocking pool, keeping IPC/UI responsive; `open_terminal(hostId, path?)` opens the shell (a non-empty `path` first `cd`s into it); `open_url` opens http/https in the default browser |
 | Keys/Probe | `upload_public_key` `probe_connection` `get_host_fingerprint` `remove_known_host` | `probe_connection` returns `ready｜password_required｜host_key_changed`, or an Err with a reason for unreachable hosts |
 | Settings/Logs | `get_settings` `save_settings_cmd` `list_logs` | default theme is light |
 | System | `check_ssh` `install_openssh` | installs OpenSSH via elevated `Add-WindowsCapability` |

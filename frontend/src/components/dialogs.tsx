@@ -1,11 +1,11 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { Code2, FolderOpen, PenLine, Terminal, X } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { t } from "../i18n";
-import type { CriticalErrorPayload, Forward, HistoryEntry, Host, Language, TunnelMode } from "../types";
+import type { CriticalErrorPayload, Forward, Host, Language, TunnelMode } from "../types";
 
 function Modal(props: { children: ReactNode; maxWidth?: string }) {
   return (
@@ -202,7 +202,7 @@ export function SendCommandDialog(props: {
           <div>
             <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{t(lang, "output")}</div>
             <pre className="max-h-64 overflow-auto rounded-2xl bg-slate-100 p-4 text-xs leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-              {props.busy ? t(lang, "running2") : props.output}
+              {props.busy ? t(lang, "commandRunning") : props.output}
             </pre>
           </div>
         )}
@@ -511,111 +511,6 @@ export function ConnectionErrorDialog(props: {
         </pre>
         <div className="mt-4 flex justify-end">
           <Button onClick={props.onClose}>{t(lang, "close")}</Button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/** Short "MM-DD HH:mm" stamp for a history entry's last-opened time. */
-function formatOpenedAt(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/**
- * Remote-connection window for a host: a list of remote paths (from VS Code Remote-SSH history, matched
- * by IP). Clicking a record opens a terminal `cd`'d into that path; the VS Code button opens it in VS Code;
- * the pen icon fills it into the retained manual field. The manual field opens a typed path with either tool.
- */
-export function RemoteConnectionDialog(props: {
-  language: Language;
-  hostName: string;
-  entries: HistoryEntry[];
-  onOpenTerminalEntry: (entry: HistoryEntry) => void;
-  onOpenVscodeEntry: (entry: HistoryEntry) => void;
-  onOpenTerminalPath: (path: string) => void;
-  onOpenVscodePath: (path: string) => void;
-  onCancel: () => void;
-}) {
-  const lang = props.language;
-  const empty = props.entries.length === 0;
-  const [customPath, setCustomPath] = useState("");
-  const path = customPath.trim();
-  // Dialog-wide shortcuts: Enter opens the (blank-friendly) path in a terminal, Esc cancels.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter") props.onOpenTerminalPath(path);
-      else if (event.key === "Escape") props.onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [path, props]);
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-6 backdrop-blur-sm">
-      <Card className="w-full max-w-lg border-blue-200 bg-white dark:border-blue-900 dark:bg-slate-950">
-        <DialogHeader title={`${t(lang, "historyTitle")} — ${props.hostName}`} description={t(lang, "historyDesc")} onClose={props.onCancel} />
-        <div className="grid max-h-80 gap-1 overflow-auto">
-          {empty && (
-            <p className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm leading-6 text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              {t(lang, "historyEmpty")}
-            </p>
-          )}
-          {props.entries.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-center rounded-xl text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
-            >
-              <button
-                onClick={() => props.onOpenTerminalEntry(entry)}
-                title={`${t(lang, "openInTerminal")} — ${entry.label}`}
-                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
-              >
-                <FolderOpen size={16} className="shrink-0 text-slate-400" />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="block truncate">{entry.label}</span>
-                  <span className="block text-xs text-slate-400 dark:text-slate-500">{formatOpenedAt(entry.openedAt)}</span>
-                </span>
-              </button>
-              <button
-                onClick={() => props.onOpenVscodeEntry(entry)}
-                title={t(lang, "openInVscode")}
-                className="mr-1 flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <Code2 size={15} />
-                {t(lang, "remoteOpenVscode")}
-              </button>
-              <button
-                onClick={() => setCustomPath(entry.label)}
-                title={t(lang, "vscodeFillPath")}
-                aria-label={t(lang, "vscodeFillPath")}
-                className="mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <PenLine size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-          <label className="mb-2 block text-xs font-medium text-slate-500 dark:text-slate-400">{t(lang, "remoteOpenPathLabel")}</label>
-          <Input
-            value={customPath}
-            placeholder={t(lang, "remoteOpenPathPlaceholder")}
-            onChange={(e) => setCustomPath(e.target.value)}
-            autoFocus
-          />
-        </div>
-        <div className="mt-5 flex justify-end gap-3">
-          <Button variant="secondary" className="min-w-[7.5rem]" onClick={() => props.onOpenTerminalPath(path)}>
-            <Terminal size={16} />
-            {t(lang, "remoteOpenTerminal")}
-          </Button>
-          <Button className="min-w-[7.5rem]" onClick={() => props.onOpenVscodePath(path)}>
-            <Code2 size={16} />
-            {t(lang, "remoteOpenVscode")}
-          </Button>
-          <Button variant="secondary" onClick={props.onCancel}>{t(lang, "cancel")}</Button>
         </div>
       </Card>
     </div>

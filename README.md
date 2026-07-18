@@ -6,19 +6,18 @@ SSHDeck is a visual SSH management tool for Windows. Since v0.2.0 it is **host-c
 
 ## Screenshots
 
-![Main page screenshot](docs/Pictures/screenshot-main.png)
-
-![Config page screenshot](docs/Pictures/screenshot-config.png)
+![SSHDeck English interface — Remote Connections](docs/Pictures/screenshot-en.png)
 
 ## Features
 
 - **Host-centric, two-level structure**: a host (connection parameters) is the top level, and a port forward (bind/target parameters) is the second level — click a host to expand it.
 - Supports Local, Remote, and Dynamic SOCKS forwarding modes.
 - Each forward connects/disconnects independently; you can disconnect a whole host or everything, with keep-alive auto-reconnect.
-- **Open in browser**: a running forward can be opened in your default browser at its listening port (`http://<bind host>:<local port>`, with `0.0.0.0` treated as `127.0.0.1`) — available on both the Home and History pages; most useful for Local forwards.
+- **Dedicated Remote Connections and Port Forwarding pages**: both pages are grouped by host. Expanding a host on Remote Connections shows its historical remote paths; expanding one on Port Forwarding shows its current forward configuration and controls.
+- **Open in browser**: a running forward can be opened in your default browser at its listening port (`http://<bind host>:<local port>`, with `0.0.0.0` treated as `127.0.0.1`) — available on both the Home and Port Forwarding pages; most useful for Local forwards.
 - **Send command**: run a single command on the host over SSH, with output shown in a dialog; works passwordless or with a one-time password.
 - **Open terminal**: launches an external PowerShell window already connected to the server over SSH, with Tab completion.
-- **Open in VS Code**: a dropdown next to "Open terminal" adds "Open in VS Code". It reads VS Code's Remote-SSH history (preferring the extension's own up-to-date list so you don't just see stale entries) and lists the remote folders previously opened for this host (matched by IP); click one to open it over Remote-SSH, or click the button on its right to fill that path into the directory box below for further editing. You can also "Direct" connect (VS Code's default, no folder) or open a specific directory (type a remote path; `~`/relative is resolved against home). "Direct" adds an alias to `~/.ssh/config` if needed (spaces in the alias become underscores to avoid parse errors). VS Code's install location is detected automatically (including via the registry, so non-standard drives work); a dialog warns if VS Code or the Remote-SSH extension is missing.
+- **Open in VS Code**: the Remote Connections page reads VS Code Remote-SSH history (preferring the extension's freshest list), matches folders to each host by IP, and lets you reopen a path in VS Code or a terminal. You can also connect directly or enter a remote path manually; `~` and relative paths resolve against the remote home directory. VS Code and the Remote-SSH extension are detected automatically.
 - **Upload key**: writes your local public key into the remote `authorized_keys` for passwordless login (it first checks whether passwordless access already works).
 - **Jump host (ProxyJump)**: a host can specify a jump host to connect through another machine (optional).
 - **Import / export hosts**: import from an exported file or your local `~/.ssh/config`; export to a file (with forwards and ports, re-importable) or write into `~/.ssh/config` (only the ssh-resolvable parts). Deduplicated by host IP — on conflict, choose "Overwrite all" or "Import non-duplicates only".
@@ -27,9 +26,9 @@ SSHDeck is a visual SSH management tool for Windows. Since v0.2.0 it is **host-c
 - **Automatic local-port fallback**: on connect, if the configured local port is already in use, it auto-increments (+1) to the first free port and listens there; the Home page and "Open in browser" show the actual port. It only errors if a whole range from that port is occupied (and then names the forward or process, with PID).
 - Authentication is detected automatically on connect: passwordless if possible, otherwise a password prompt appears (passwords are never written to config).
 - If the remote host key changes, a dialog warns you so you can verify the fingerprint before deciding to trust the new key and retry.
-- The Home page is a lightweight dashboard: current connections are shown in full, grouped by host (two columns), each forward can be disconnected individually, and there is a "New" shortcut; pinned hosts get their own block where you can send a command, open a terminal, or open in VS Code directly; full logs live on a separate Logs page.
+- The Home page is a lightweight dashboard: current connections are grouped by host, each forward can be disconnected individually, and there is a "New" shortcut; pinned hosts provide quick access to Remote Connections, while full logs live on a separate Logs page.
 - New forwards default to "keep connected" off; once enabled, saving connects automatically and caches the password for reconnects.
-- The config page returns to Home after 3 minutes of inactivity.
+- The Port Forwarding page returns to Home after 3 minutes of inactivity.
 - Log levels: Debug, Info, Warning, Error.
 - Dark / light themes and Chinese / English UI; **light by default**, and the settings options follow the UI language.
 - On startup it checks whether the OpenSSH client is installed; if not, a dialog offers one-click install (admin rights, downloaded from Windows Update).
@@ -38,9 +37,9 @@ SSHDeck is a visual SSH management tool for Windows. Since v0.2.0 it is **host-c
 
 ## Download & Run
 
-Download `v0.3.1-beta.1` from GitHub Releases:
+Download `v0.3.0-beta.3` from GitHub Releases:
 
-- Recommended installer: `SSHDeck_0.3.1-beta.1_x64-setup.exe`
+- Recommended installer: `SSHDeck_0.3.0-beta.3_x64-setup.exe`
 - Or run the portable build directly: `sshdeck.exe`
 
 Already installed? Just open **Settings → Software Update** and click **Check for updates**.
@@ -53,7 +52,7 @@ ssh -V
 
 ## Quick Start
 
-1. Open the app, go to the Config page, click "New Host", and fill in the SSH host, user, port, and private key file.
+1. Open the app, go to Port Forwarding, click "New Host", and fill in the SSH host, user, port, and private key file.
 2. Expand the host, click "New Forward", and fill in the bind and target parameters.
 3. Click "Connect" on the forward. The app detects the auth method automatically: it connects directly when passwordless, or pops up a password prompt when needed.
 4. Use the Home page to watch current connections and key events, and the Logs page for the full runtime log.

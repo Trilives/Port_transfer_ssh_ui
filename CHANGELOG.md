@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0-beta.3
+
+**Added**
+- Dedicated **Remote Connections** page, grouped by host, with historical remote paths and Terminal / VS Code reopen actions.
+- Dedicated **Port Forwarding** page, grouped by host, for Local, Remote, and Dynamic forwarding management.
+
+**Fixed**
+- One-off SSH commands now run on a blocking worker instead of the Tauri IPC runtime, so the interface remains responsive while a remote command is running.
+- Closing a running command dialog no longer lets its eventual result overwrite a newly opened host command dialog.
+- Chinese layouts can shrink and wrap correctly in narrower windows without clipping right-side actions.
+
+**Changed**
+- Updated the English and Chinese README interface previews and refreshed the architecture documentation.
+- Split navigation, dialog orchestration, remote dialogs, and SSH execution into focused modules to keep files within the project's modularity limits.
+
 ## 0.3.0-beta.2
 
 **Added**

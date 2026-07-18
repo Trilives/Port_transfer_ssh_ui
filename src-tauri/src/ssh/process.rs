@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
     time::Duration,
@@ -253,7 +253,7 @@ fn watch_tunnel(forward_id: String, generation: u64, data_dir: PathBuf, app: App
     });
 }
 
-pub fn prepare_askpass_helper(data_dir: &PathBuf) -> Result<PathBuf, String> {
+pub fn prepare_askpass_helper(data_dir: &Path) -> Result<PathBuf, String> {
     let helper_dir = data_dir.join("helpers");
     fs::create_dir_all(&helper_dir).map_err(|err| err.to_string())?;
     // Keep "askpass" in the stem (main.rs detects the mode by filename).

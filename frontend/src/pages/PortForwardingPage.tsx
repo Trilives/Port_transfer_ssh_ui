@@ -50,7 +50,7 @@ function Dropdown(props: {
   );
 }
 
-export function ConfigPage(props: {
+export function PortForwardingPage(props: {
   language: Language;
   hosts: Host[];
   expandedIds: Set<string>;
@@ -60,7 +60,6 @@ export function ConfigPage(props: {
   onDeleteHost: (host: Host) => void;
   onTogglePin: (host: Host) => void;
   onSendCommand: (host: Host) => void;
-  onOpenRemoteConnection: (host: Host) => void;
   onUploadKey: (host: Host) => void;
   onNewForward: (host: Host) => void;
   onConnectForward: (host: Host, forward: Forward) => void;
@@ -77,12 +76,12 @@ export function ConfigPage(props: {
   return (
     <div className="grid gap-5">
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="space-y-1">
+        <CardHeader className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-[16rem] flex-1 space-y-1">
             <CardTitle>{t(lang, "configTitle")}</CardTitle>
             <CardDescription>{t(lang, "configDesc")}</CardDescription>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Dropdown
               label={t(lang, "import")}
               icon={Download}
@@ -119,7 +118,6 @@ export function ConfigPage(props: {
                 expanded={props.expandedIds.has(host.id)}
                 onToggle={() => props.onToggle(host.id)}
                 onSendCommand={() => props.onSendCommand(host)}
-                onOpenRemoteConnection={() => props.onOpenRemoteConnection(host)}
                 onUploadKey={() => props.onUploadKey(host)}
                 onNewForward={() => props.onNewForward(host)}
                 onEditHost={() => props.onEditHost(host)}
