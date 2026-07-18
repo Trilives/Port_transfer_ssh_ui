@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-beta.4
+
+**Added**
+- Published a Windows install-free portable ZIP beside the installer from the same CI build.
+
+**Changed**
+- Moved Delete Host into each Remote Connections host item, keeping host lifecycle actions out of Port Forwarding.
+- Refreshed the English and Chinese README preview composites after the final page-action layout changes.
+
 ## 0.3.0-beta.3
 
 **Added**

@@ -45,10 +45,10 @@ Click either preview to open the original 1440×900 image.
 
 ## Download & Run
 
-Download `v0.3.0-beta.3` from GitHub Releases:
+Download `v0.3.0-beta.4` from GitHub Releases:
 
-- Recommended installer: `SSHDeck_0.3.0-beta.3_x64-setup.exe`
-- Install-free ZIP: `SSHDeck_0.3.0-beta.3_x64-portable.zip` — extract it, then run `SSHDeck.exe` directly.
+- Recommended installer: `SSHDeck_0.3.0-beta.4_x64-setup.exe`
+- Install-free ZIP: `SSHDeck_0.3.0-beta.4_x64-portable.zip` — extract it, then run `SSHDeck.exe` directly.
 
 The portable package stores settings and hosts in `%LOCALAPPDATA%\codex\ssh-port-forwarder\data`, not beside the executable. It requires Windows OpenSSH Client and Microsoft Edge WebView2 Runtime. To remain install-free, update it by downloading a newer portable ZIP; the in-app updater follows the installer update path.
 

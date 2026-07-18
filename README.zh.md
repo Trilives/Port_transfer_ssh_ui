@@ -45,10 +45,10 @@ SSHDeck 是一个面向 Windows 的可视化 SSH 管理工具。从 v0.2.0 起�
 
 ## 下载与运行
 
-从 GitHub Releases 下载 `v0.3.0-beta.3`：
+从 GitHub Releases 下载 `v0.3.0-beta.4`：
 
-- 推荐下载安装包：`SSHDeck_0.3.0-beta.3_x64-setup.exe`
-- 免安装压缩包：`SSHDeck_0.3.0-beta.3_x64-portable.zip`，解压后直接运行 `SSHDeck.exe`。
+- 推荐下载安装包：`SSHDeck_0.3.0-beta.4_x64-setup.exe`
+- 免安装压缩包：`SSHDeck_0.3.0-beta.4_x64-portable.zip`，解压后直接运行 `SSHDeck.exe`。
 
 免安装版的设置与主机数据仍保存在 `%LOCALAPPDATA%\codex\ssh-port-forwarder\data`，不会写在程序旁边；系统需要 Windows OpenSSH Client 和 Microsoft Edge WebView2 Runtime。如需保持免安装方式，请手动下载新版 ZIP，应用内更新沿用安装版更新流程。
 
