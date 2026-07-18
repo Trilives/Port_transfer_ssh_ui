@@ -213,6 +213,10 @@ Events: `log-entry` (one log line); `critical-error` (forward exited with code 2
   `TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]` repo secrets, `bundle.createUpdaterArtifacts` makes the build emit the signed
   archive and `latest.json`, and `.github/workflows/build.yml` publishes pre-release tags directly and mirrors their
   `latest.json` onto the `preview` release.
+- **Portable packaging**: `scripts/package-portable.ps1` packages the compiled `sshdeck.exe`, bilingual portable notes,
+  license, and `portable.flag` into `SSHDeck_<version>_x64-portable.zip`. The same workflow uploads it beside the NSIS
+  installer on tagged releases and includes it in smoke-build artifacts. Portable data remains in the normal system
+  app-data directory, so this is install-free rather than a fully self-contained build.
 
 On app exit, all forward child processes started by this app are cleaned up.
 

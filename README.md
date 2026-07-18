@@ -48,9 +48,11 @@ Click either preview to open the original 1440×900 image.
 Download `v0.3.0-beta.3` from GitHub Releases:
 
 - Recommended installer: `SSHDeck_0.3.0-beta.3_x64-setup.exe`
-- Or run the portable build directly: `sshdeck.exe`
+- Install-free ZIP: `SSHDeck_0.3.0-beta.3_x64-portable.zip` — extract it, then run `SSHDeck.exe` directly.
 
-Already installed? Just open **Settings → Software Update** and click **Check for updates**.
+The portable package stores settings and hosts in `%LOCALAPPDATA%\codex\ssh-port-forwarder\data`, not beside the executable. It requires Windows OpenSSH Client and Microsoft Edge WebView2 Runtime. To remain install-free, update it by downloading a newer portable ZIP; the in-app updater follows the installer update path.
+
+Using the installed edition? Open **Settings → Software Update** and click **Check for updates**.
 
 Before running, make sure the Windows OpenSSH Client is installed and that PowerShell can run:
 
@@ -60,8 +62,8 @@ ssh -V
 
 ## Quick Start
 
-1. Open the app, go to Port Forwarding, click "New Host", and fill in the SSH host, user, port, and private key file.
-2. Expand the host, click "New Forward", and fill in the bind and target parameters.
+1. Open the app, go to Remote Connections, click "New Host", and fill in the SSH host, user, port, and private key file.
+2. Go to Port Forwarding, expand the host, click "New Forward", and fill in the bind and target parameters.
 3. Click "Connect" on the forward. The app detects the auth method automatically: it connects directly when passwordless, or pops up a password prompt when needed.
 4. Use the Home page to watch current connections and key events, and the Logs page for the full runtime log.
 

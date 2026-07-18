@@ -5,6 +5,7 @@
 **Added**
 - Dedicated **Remote Connections** page, grouped by host, with historical remote paths and Terminal / VS Code reopen actions.
 - Dedicated **Port Forwarding** page, grouped by host, for Local, Remote, and Dynamic forwarding management.
+- Automated Windows portable ZIP packaging, published beside the installer from the same CI build.
 
 **Fixed**
 - One-off SSH commands now run on a blocking worker instead of the Tauri IPC runtime, so the interface remains responsive while a remote command is running.
@@ -13,7 +14,7 @@
 - The sidebar now stays fixed while only the right-hand page content scrolls.
 
 **Changed**
-- Moved host import/export, New Host, and Upload Key actions to Remote Connections; Port Forwarding now keeps only forwarding actions and adds one-click host disconnect.
+- Moved host import/export, New Host, Upload Key, and Delete Host actions to Remote Connections; Port Forwarding now keeps only forwarding actions and adds one-click host disconnect.
 - Replaced the outdated README screenshots with four current 1440×900 English/Chinese page previews and refreshed the architecture documentation.
 - Split navigation, dialog orchestration, remote dialogs, and SSH execution into focused modules to keep files within the project's modularity limits.
 

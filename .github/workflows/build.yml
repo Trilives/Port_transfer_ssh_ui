@@ -3,7 +3,7 @@ name: Build
 # Windows-only Tauri build.
 #
 # - On pull requests and manual runs: builds the app as a smoke test and uploads
-#   the NSIS installer as a workflow artifact.
+#   the NSIS installer plus portable ZIP as workflow artifacts.
 # - On a stable version tag (v1.2.3): builds and drafts a GitHub Release for the Stable channel.
 # - On a pre-release tag (v1.2.3-beta.1): builds a published pre-release and mirrors its `latest.json`
 #   onto the rolling `preview` release, which the in-app Preview update channel points at.
@@ -66,11 +66,32 @@ jobs:
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SSHDeck __VERSION__' || '' }}
-          releaseBody: "See the assets below to download and install. The app can also update itself from the Settings page under Software Update."
+          releaseBody: "Download the installer or the install-free portable ZIP from the assets below. Installed editions can also update from Settings > Software Update."
           # Stable tags (v1.2.3) are drafted for manual publishing; pre-release tags (v1.2.3-beta.1) are
           # published immediately as a pre-release so the Preview channel's manifest resolves to live assets.
           releaseDraft: ${{ !contains(github.ref_name, '-') }}
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+      - name: Package portable build
+        shell: pwsh
+        run: |
+          $version = (Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          & ".\scripts\package-portable.ps1" `
+            -Executable "src-tauri\target\release\sshdeck.exe" `
+            -Version $version `
+            -OutputDirectory "src-tauri\target\release"
+
+      - name: Upload portable release asset
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          gh release upload $env:GITHUB_REF_NAME `
+            "src-tauri/target/release/SSHDeck_${version}_x64-portable.zip" `
+            --clobber
 
       # Preview channel: mirror the pre-release's signed manifest onto the fixed, rolling `preview` release,
       # which the app's Preview endpoint (releases/download/preview/latest.json) points at. The installer URLs
@@ -86,7 +107,7 @@ jobs:
           gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir preview-manifest --clobber
           gh release upload preview preview-manifest/latest.json --clobber
 
-      # For PR / manual runs (no tag), keep the installer as a downloadable artifact.
+      # For PR / manual runs (no tag), keep the installer and portable ZIP as downloadable artifacts.
       - name: Upload artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v7
@@ -94,5 +115,6 @@ jobs:
           name: sshdeck-windows
           path: |
             src-tauri/target/release/bundle/**/*
+            src-tauri/target/release/SSHDeck_*_x64-portable.zip
           if-no-files-found: warn
           retention-days: 7
