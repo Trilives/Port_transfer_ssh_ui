@@ -6,7 +6,15 @@ SSHDeck 是一个面向 Windows 的可视化 SSH 管理工具。从 v0.2.0 起�
 
 ## 界面预览
 
-![SSHDeck 中文界面——端口转发](docs/Pictures/screenshot-zh.png)
+点击任一预览图可查看 1440×900 原图。
+
+### 远程连接
+
+[![SSHDeck 中文界面——远程连接](docs/Pictures/preview-zh-remote.png)](docs/Pictures/preview-zh-remote.png)
+
+### 端口转发
+
+[![SSHDeck 中文界面——端口转发](docs/Pictures/preview-zh-forwarding.png)](docs/Pictures/preview-zh-forwarding.png)
 
 ## 主要功能
 

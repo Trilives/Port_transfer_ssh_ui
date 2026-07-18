@@ -6,7 +6,15 @@ SSHDeck is a visual SSH management tool for Windows. Since v0.2.0 it is **host-c
 
 ## Screenshots
 
-![SSHDeck English interface — Remote Connections](docs/Pictures/screenshot-en.png)
+Click either preview to open the original 1440×900 image.
+
+### Remote Connections
+
+[![SSHDeck English interface — Remote Connections](docs/Pictures/preview-en-remote.png)](docs/Pictures/preview-en-remote.png)
+
+### Port Forwarding
+
+[![SSHDeck English interface — Port Forwarding](docs/Pictures/preview-en-forwarding.png)](docs/Pictures/preview-en-forwarding.png)
 
 ## Features
 
