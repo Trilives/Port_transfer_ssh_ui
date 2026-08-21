@@ -110,8 +110,9 @@ model.rs           Host / Forward / enums / AppSettings / LogEntry / HistoryEntr
 store.rs           read_json / write_json, data directory path, AppState persistence and log writes
 validate.rs        validate_host / validate_forward / hostname_chars_ok (ASCII-only SSH host check)
 portcheck.rs       local port-in-use detection + owning process name/PID (netstat + tasklist)
-sshconfig.rs       parse/write ~/.ssh/config (import hosts, export to a managed block, look up alias by IP)
-vscode.rs          VS Code Remote-SSH: detect install, read history, match by IP, write config, open folder-uri
+sshconfig.rs       parse/write ~/.ssh/config (import/export, find a VS Code alias by full connection profile)
+vscode.rs          VS Code Remote-SSH: read history, match hosts, maintain exact-profile aliases, shape remote opens
+vscode_launcher.rs Locate/launch VS Code and build its documented `--remote` CLI invocation
 history.rs         open-history pure logic: upsert/dedup, merge scanned VS Code entries, sort by recency
 terminal.rs        open_terminal: launches an external PowerShell window running ssh (optionally `cd`'d into a remote path)
 ssh/
@@ -119,6 +120,7 @@ ssh/
   exec.rs          blocking one-off SSH execution + stdout/stderr merge (called via spawn_blocking)
   diagnose.rs      classify_ssh_failure: classify unreachable/auth/etc. failures from stderr, with localized reasons
   process.rs       start/stop/watch/cleanup tunnel, CREATE_NO_WINDOW, askpass helper
+  readiness.rs     wait for a spawned tunnel to listen / reject immediate SSH startup failures
   probe.rs         probe_connection / get_host_fingerprint / remove_known_host
   keys.rs          ensure_public_key / resolve_identity_file / upload_key_to_remote
 commands/          thin #[tauri::command] wrappers, one file per domain:
@@ -157,7 +159,7 @@ scroll container.
 | Keys/Probe | `upload_public_key` `probe_connection` `get_host_fingerprint` `remove_known_host` | `probe_connection` returns `ready｜password_required｜host_key_changed`, or an Err with a reason for unreachable hosts |
 | Settings/Logs | `get_settings` `save_settings_cmd` `list_logs` | default theme is light |
 | System | `check_ssh` `install_openssh` | installs OpenSSH via elevated `Add-WindowsCapability` |
-| VS Code | `vscode_status` `vscode_open` `vscode_open_direct` `vscode_open_path` | `vscode_open(uri, hostId, label)` bumps the entry and rescans; opens matched by host IP via `~/.ssh/config` (see `vscode.rs` for the state.vscdb/storage.json merge logic) |
+| VS Code | `vscode_status` `vscode_open` `vscode_open_direct` `vscode_open_path` | `vscode_open(uri, hostId, label)` reopens the path with the host's current full SSH profile, bumps the entry, and rescans; history is discovered by IP but connection aliases must also match user/port/key/ProxyJump |
 | History | `list_history` | returns a host's open-history (recency-sorted), rescanning + merging VS Code's own history on the way; the Remote Connection dialog shows the `vscode` (remote-path) entries |
 | Update | `check_update` `install_update` | channel-aware; each builds the updater with the channel's endpoint (`stable` = releases/latest, `preview` = releases/download/preview/latest.json) and verifies the configured `pubkey` |
 | Window | `hide_to_tray` `quit_app` | driven by the close prompt; the tray/single-instance raise the window in Rust |
@@ -172,6 +174,8 @@ Events: `log-entry` (one log line); `critical-error` (forward exited with code 2
   the view, so Home, the forward row, and "Open in browser" always point at what's really listening. Remote mode listens on
   the remote side, so no local check applies.
 - **Connect / auto-reconnect**: `connect_forward` builds `ssh -N -T -L/-R/-D … user@host` and runs it with `CREATE_NO_WINDOW`;
+  local/dynamic connections are reported as connected only after the listener accepts TCP (important for slower jump-host handshakes),
+  while remote forwards are checked for immediate SSH startup failure;
   `watch_tunnel` polls the child and reconnects after a delay if `keepConnected` is on and the exit wasn't fatal (exit code 255
   → log + `critical-error`, no retry). Editing a running host/forward (`restart_forward`) reuses the cached password and does
   a stop-then-start.
@@ -186,7 +190,7 @@ Events: `log-entry` (one log line); `critical-error` (forward exited with code 2
   `storage.json` (fallback), matched to the host by IP. Clicking a record opens a terminal `cd`'d into that path; the
   VS Code button opens it in VS Code (`vscode_open` by URI, else `vscode_open_path`); the pen icon fills the manual field.
   The manual field opens a typed path with either tool — an empty VS Code open falls back to a direct connect
-  (`vscode_open_path` → `open_direct_for_host`, which reuses or writes a `~/.ssh/config` alias); `~`/relative paths resolve
+  (`vscode_open_path` → `open_direct_for_host`, which reuses or writes a matching `~/.ssh/config` alias); `~`/relative paths resolve
   against the remote `$HOME` via a one-time passwordless probe. Opening the dialog does not require VS Code; the
   install/Remote-SSH check happens only when a VS Code action is invoked.
 - **Open-history**: opening a port, a plain terminal, or a VS Code folder upserts a `HistoryEntry` (deduped per host,

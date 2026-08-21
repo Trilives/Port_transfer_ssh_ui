@@ -22,8 +22,11 @@ use serde::Serialize;
 
 use crate::model::Host;
 use crate::ssh::command::build_send_command;
-use crate::sshconfig::{append_host_stanza, find_alias_for_ip, parse_ssh_config, sanitize_alias, ssh_config_path};
+use crate::sshconfig::{
+    append_host_stanza, find_alias_for_host, parse_ssh_config, sanitize_alias, ssh_config_path,
+};
 use crate::util::no_window;
+use crate::vscode_launcher;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,16 +57,10 @@ pub struct VscodeOpenRootResult {
     pub uri: String,
 }
 
-/// How to launch VS Code: call `Code.exe` directly, or fall back to `cmd /c code.cmd`.
-struct CodeLauncher {
-    program: PathBuf,
-    prefix: Vec<String>,
-}
-
 /// Detect whether VS Code and the Remote-SSH extension are installed.
 pub fn status() -> VscodeStatus {
     VscodeStatus {
-        installed: code_launcher().is_some(),
+        installed: vscode_launcher::available(),
         remote_ssh: remote_ssh_installed(),
     }
 }
@@ -169,26 +166,23 @@ fn read_state_db_item(key: &str) -> Option<String> {
     .ok()
 }
 
-/// Open a history remote folder with `code --folder-uri <uri>`.
-pub fn open_folder_uri(uri: &str) -> Result<(), String> {
-    if !uri.starts_with("vscode-remote://") {
-        return Err("Invalid VS Code folder URI.".to_string());
-    }
-    let launcher = code_launcher().ok_or_else(|| "VS Code not found.".to_string())?;
-    let mut command = Command::new(&launcher.program);
-    command.args(&launcher.prefix);
-    command.arg("--folder-uri").arg(uri);
-    no_window(&mut command);
-    command.spawn().map_err(|err| err.to_string())?;
-    Ok(())
-}
-
 /// Direct connect: find (or write) the ssh config alias for this IP, then open a connected remote window with no
 /// folder using VS Code's default mode (`code --remote ssh-remote+<alias>`, without any history path).
 pub fn open_direct_for_host(host: &Host) -> Result<VscodeOpenRootResult, String> {
     let (alias, added_to_config) = ensure_alias(host)?;
-    open_remote_window(&alias)?;
-    Ok(VscodeOpenRootResult { added_to_config, alias, uri: String::new() })
+    vscode_launcher::open_remote_window(&alias)?;
+    Ok(VscodeOpenRootResult {
+        added_to_config,
+        alias,
+        uri: String::new(),
+    })
+}
+
+/// Reopen a historical folder using the current host settings instead of trusting the URI's stale authority.
+pub fn open_history_for_host(host: &Host, uri: &str) -> Result<VscodeOpenRootResult, String> {
+    let (_, encoded_path) =
+        parse_remote_uri(uri).ok_or_else(|| "Invalid VS Code folder URI.".to_string())?;
+    open_path_for_host(host, &percent_decode(&encoded_path))
 }
 
 /// Open the specified remote directory. Absolute paths (starting with `/`) open as-is; `~` or relative paths resolve against the home directory.
@@ -213,12 +207,20 @@ pub fn open_path_for_host(host: &Host, path: &str) -> Result<VscodeOpenRootResul
         }
     };
 
-    let uri = format!("vscode-remote://ssh-remote+{}{}", alias, encode_path(&absolute));
-    open_folder_uri(&uri)?;
-    Ok(VscodeOpenRootResult { added_to_config, alias, uri })
+    vscode_launcher::open_remote_folder(&alias, &absolute)?;
+    let uri = format!(
+        "vscode-remote://ssh-remote+{}{}",
+        alias,
+        percent_encode_path(&absolute)
+    );
+    Ok(VscodeOpenRootResult {
+        added_to_config,
+        alias,
+        uri,
+    })
 }
 
-/// Find the ssh config alias for this host's IP; if none exists, append one using the host name (falling back to the IP on conflict).
+/// Find an SSH config alias with the same full connection settings; if none exists, append a unique one.
 /// Returns (alias, whether it was newly written this time).
 fn ensure_alias(host: &Host) -> Result<(String, bool), String> {
     let ip = host.ssh_host.trim();
@@ -227,7 +229,7 @@ fn ensure_alias(host: &Host) -> Result<(String, bool), String> {
     }
     let config_path = ssh_config_path()?;
     let content = fs::read_to_string(&config_path).unwrap_or_default();
-    match find_alias_for_ip(&content, ip) {
+    match find_alias_for_host(&content, host) {
         Some(alias) => Ok((alias, false)),
         None => {
             let alias = pick_alias(&content, host, ip);
@@ -257,22 +259,6 @@ fn query_remote_home(host: &Host) -> Option<String> {
     }
     let home = String::from_utf8_lossy(&output.stdout).trim().to_string();
     home.starts_with('/').then_some(home)
-}
-
-/// Open a connected remote window with no folder (`code --remote ssh-remote+<authority>`).
-fn open_remote_window(authority: &str) -> Result<(), String> {
-    let launcher = code_launcher().ok_or_else(|| "VS Code not found.".to_string())?;
-    let mut command = Command::new(&launcher.program);
-    command.args(&launcher.prefix);
-    command.arg("--remote").arg(format!("ssh-remote+{authority}"));
-    no_window(&mut command);
-    command.spawn().map_err(|err| err.to_string())?;
-    Ok(())
-}
-
-/// Minimally escape only spaces in a folderUri path (home directories are almost always ASCII; returned as-is when there are no spaces).
-fn encode_path(path: &str) -> String {
-    path.replace(' ', "%20")
 }
 
 /// Percent-encode a remote path into the path portion of a folderUri: keeps unreserved characters and `/`, escapes everything else as UTF-8 bytes.
@@ -305,7 +291,7 @@ fn alias_to_ip_map() -> HashMap<String, String> {
     map
 }
 
-/// Pick an alias for a host to be written into the config that doesn't conflict with existing entries (prefers the host name, then the IP).
+/// Pick an alias for a host to be written into the config that doesn't conflict with existing entries.
 fn pick_alias(content: &str, host: &Host, ip: &str) -> String {
     let existing: HashSet<String> = parse_ssh_config(content)
         .into_iter()
@@ -316,13 +302,25 @@ fn pick_alias(content: &str, host: &Host, ip: &str) -> String {
     if candidate.is_empty() {
         candidate = ip.to_string();
     }
-    if !existing.contains(&candidate) {
-        return candidate;
+    let base = if candidate.is_empty() {
+        ip.to_string()
+    } else {
+        candidate
+    };
+    if !existing.contains(&base) {
+        return base;
     }
-    if !existing.contains(ip) {
-        return ip.to_string();
+    let prefixed = format!("{base}-sshdeck");
+    if !existing.contains(&prefixed) {
+        return prefixed;
     }
-    format!("{ip}-pf")
+    for suffix in 2.. {
+        let candidate = format!("{prefixed}-{suffix}");
+        if !existing.contains(&candidate) {
+            return candidate;
+        }
+    }
+    unreachable!()
 }
 
 /// Split `vscode-remote://ssh-remote(+|%2B)<authority>/<path>` into its authority and path parts.
@@ -428,116 +426,4 @@ fn remote_ssh_installed() -> bool {
         }
     }
     false
-}
-
-/// Locate how to launch VS Code: prefer `Code.exe` (including registry probing, so non-standard drive installs work),
-/// falling back to `cmd /c code.cmd`.
-fn code_launcher() -> Option<CodeLauncher> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    for var in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
-        if let Some(base) = std::env::var_os(var) {
-            candidates.push(PathBuf::from(&base).join("Programs").join("Microsoft VS Code").join("Code.exe"));
-            candidates.push(PathBuf::from(&base).join("Microsoft VS Code").join("Code.exe"));
-        }
-    }
-    if let Some(path) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path) {
-            if dir.join("code.exe").exists() {
-                candidates.push(dir.join("code.exe"));
-            }
-            // bin\code(.cmd)'s parent directory is the install root, which contains Code.exe.
-            if dir.join("code.cmd").exists() || dir.join("code").exists() {
-                if let Some(parent) = dir.parent() {
-                    candidates.push(parent.join("Code.exe"));
-                }
-            }
-        }
-    }
-    // Registry probing: doesn't rely on PATH, covers installs on any drive letter (e.g. E:\).
-    if let Some(exe) = find_code_via_registry() {
-        candidates.push(exe);
-    }
-    for candidate in &candidates {
-        if candidate.exists() {
-            return Some(CodeLauncher { program: candidate.clone(), prefix: Vec::new() });
-        }
-    }
-    // Fallback: Code.exe not found, but code.cmd is on PATH, so invoke it via cmd /c.
-    if let Some(path) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path) {
-            for name in ["code.cmd", "code.exe"] {
-                let candidate = dir.join(name);
-                if candidate.exists() {
-                    return Some(CodeLauncher {
-                        program: PathBuf::from("cmd"),
-                        prefix: vec!["/c".to_string(), candidate.to_string_lossy().into_owned()],
-                    });
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Probe the Windows registry for `Code.exe`'s path: check the `vscode://` protocol handler first, then the uninstall entry's DisplayIcon.
-fn find_code_via_registry() -> Option<PathBuf> {
-    // vscode protocol command: the default value looks like "<drive>\...\Code.exe" --open-url -- "%1"
-    let protocol_keys = [
-        "HKEY_CLASSES_ROOT\\vscode\\shell\\open\\command",
-        "HKEY_CURRENT_USER\\Software\\Classes\\vscode\\shell\\open\\command",
-    ];
-    for key in protocol_keys {
-        if let Some(exe) = reg_query_code_exe(&[key, "/ve"]) {
-            return Some(exe);
-        }
-    }
-    // Uninstall entry DisplayIcon: looks like <drive>\...\Code.exe,0 (user install under HKCU, system install under HKLM).
-    let uninstall_keys = [
-        "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{771FD6B0-FA20-440A-A002-3B3BAC16DC50}_is1",
-        "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1",
-        "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1",
-    ];
-    for key in uninstall_keys {
-        if let Some(exe) = reg_query_code_exe(&[key, "/v", "DisplayIcon"]) {
-            return Some(exe);
-        }
-    }
-    None
-}
-
-/// Run `reg query <args>` and extract an existing `Code.exe` path from the output.
-fn reg_query_code_exe(args: &[&str]) -> Option<PathBuf> {
-    let mut command = Command::new("reg");
-    command.arg("query").args(args);
-    no_window(&mut command);
-    let output = command.output().ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    extract_code_exe(&text)
-}
-
-/// Extract a path ending in `Code.exe` from a line of `reg` output (handles both quoted protocol commands and bare DisplayIcon values).
-fn extract_code_exe(text: &str) -> Option<PathBuf> {
-    for line in text.lines() {
-        let lower = line.to_lowercase();
-        let Some(hit) = lower.find("code.exe") else {
-            continue;
-        };
-        let end = hit + "code.exe".len();
-        let prefix = &line[..end];
-        let start = if let Some(quote) = prefix.rfind('"') {
-            // Protocol command: "<path>\Code.exe" --open-url ...
-            quote + 1
-        } else if let Some(sz) = lower[..end].rfind("reg_sz") {
-            // DisplayIcon: <path>\Code.exe,0, with the path following REG_SZ and some whitespace.
-            let after = sz + "reg_sz".len();
-            after + (line[after..end].len() - line[after..end].trim_start().len())
-        } else {
-            0
-        };
-        let candidate = PathBuf::from(line[start..end].trim());
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-    None
 }

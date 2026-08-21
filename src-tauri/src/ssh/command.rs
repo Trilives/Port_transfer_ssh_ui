@@ -182,3 +182,41 @@ pub fn build_terminal_args(host: &Host, path: Option<&str>) -> Result<Vec<String
     }
     Ok(command)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_forward_keeps_proxy_jump_before_forward_and_destination() {
+        let host = Host {
+            ssh_host: "10.0.0.8".to_string(),
+            ssh_user: "dev".to_string(),
+            proxy_jump: "jump@203.0.113.8:2222".to_string(),
+            ..Host::default()
+        };
+        let forward = Forward {
+            mode: TunnelMode::Local,
+            bind_host: "127.0.0.1".to_string(),
+            bind_port: "8080".to_string(),
+            target_host: "127.0.0.1".to_string(),
+            target_port: "80".to_string(),
+            ..Forward::default()
+        };
+
+        let command = build_ssh_command(&host, &forward).unwrap();
+        let jump = command
+            .windows(2)
+            .position(|args| args == ["-J", "jump@203.0.113.8:2222"])
+            .unwrap();
+        let tunnel = command
+            .windows(2)
+            .position(|args| args == ["-L", "127.0.0.1:8080:127.0.0.1:80"])
+            .unwrap();
+        let destination = command
+            .iter()
+            .position(|arg| arg == "dev@10.0.0.8")
+            .unwrap();
+        assert!(jump < tunnel && tunnel < destination);
+    }
+}

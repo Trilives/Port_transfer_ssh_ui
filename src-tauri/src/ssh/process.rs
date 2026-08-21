@@ -12,6 +12,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::model::{CriticalErrorPayload, Forward, Host};
 use crate::ssh::command::build_ssh_command;
 use crate::ssh::diagnose::classify_ssh_failure;
+use crate::ssh::readiness::wait_for_tunnel_ready;
 use crate::state::{AppState, ManagedTunnel};
 use crate::util::{lock_error, no_window};
 
@@ -77,7 +78,12 @@ pub fn start_tunnel(
             .env("DISPLAY", "sshdeck")
             .env("SSHDECK_PASSWORD", password_value);
     }
-    let child = process.spawn().map_err(|err| err.to_string())?;
+    let mut child = process.spawn().map_err(|err| err.to_string())?;
+    if let Err(err) = wait_for_tunnel_ready(&mut child, &forward) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(err);
+    }
 
     let forward_id = forward.id.clone();
     let generation = state.next_tunnel_generation();

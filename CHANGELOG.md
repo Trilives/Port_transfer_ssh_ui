@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1-beta.2
+
+**Fixed**
+- Open remote folders with VS Code's documented `--remote` CLI form and preserve non-ASCII/special-character paths.
+- Keep direct and ProxyJump connections to the same IP on separate SSH config aliases, and reopen history with the host's current connection profile.
+- Wait for local/dynamic SSH listeners to become reachable before reporting a forward as connected, avoiding jump-host startup races.
+
 ## 0.3.0
 
 **Added**

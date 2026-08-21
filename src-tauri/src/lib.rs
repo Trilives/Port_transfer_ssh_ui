@@ -11,6 +11,7 @@ mod terminal;
 mod util;
 mod validate;
 mod vscode;
+mod vscode_launcher;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

@@ -94,13 +94,29 @@ pub fn sanitize_alias(alias: &str) -> String {
         .collect()
 }
 
-/// Find the first alias in the config whose `HostName` equals this IP (used by VS Code to reuse an existing entry by IP).
-pub fn find_alias_for_ip(content: &str, ip: &str) -> Option<String> {
-    let ip = ip.trim();
+/// Find an alias whose explicit connection settings match this host.
+/// Matching only `HostName` is unsafe: the same private IP can be reached directly and through a jump host.
+pub fn find_alias_for_host(content: &str, expected: &Host) -> Option<String> {
     parse_ssh_config(content)
         .into_iter()
-        .find(|host| host.ssh_host.trim() == ip && !host.name.trim().is_empty())
+        .find(|candidate| {
+            candidate.ssh_host.trim() == expected.ssh_host.trim()
+                && effective_port(&candidate.ssh_port) == effective_port(&expected.ssh_port)
+                && candidate.ssh_user.trim() == expected.ssh_user.trim()
+                && candidate.identity_file.trim() == expected.identity_file.trim()
+                && candidate.proxy_jump.trim() == expected.proxy_jump.trim()
+                && !candidate.name.trim().is_empty()
+        })
         .map(|host| host.name)
+}
+
+fn effective_port(port: &str) -> &str {
+    let port = port.trim();
+    if port.is_empty() {
+        "22"
+    } else {
+        port
+    }
 }
 
 /// Append a host entry to the end of the config (writes only non-empty, ssh-parsable fields), returning the new full text.
@@ -222,4 +238,38 @@ pub fn upsert_managed_block(existing: &str, block: &str) -> String {
     }
     result.push_str(block);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expected_host(proxy_jump: &str) -> Host {
+        Host {
+            ssh_host: "10.0.0.8".to_string(),
+            ssh_port: "22".to_string(),
+            ssh_user: "dev".to_string(),
+            proxy_jump: proxy_jump.to_string(),
+            ..Host::default()
+        }
+    }
+
+    #[test]
+    fn exact_alias_does_not_reuse_same_ip_without_jump_host() {
+        let config = "Host direct\n    HostName 10.0.0.8\n    User dev\n";
+        assert_eq!(
+            find_alias_for_host(config, &expected_host("jump@203.0.113.8")),
+            None
+        );
+    }
+
+    #[test]
+    fn exact_alias_reuses_matching_jump_host() {
+        let config =
+            "Host via-jump\n    HostName 10.0.0.8\n    User dev\n    ProxyJump jump@203.0.113.8\n";
+        assert_eq!(
+            find_alias_for_host(config, &expected_host("jump@203.0.113.8")),
+            Some("via-jump".to_string())
+        );
+    }
 }

@@ -20,10 +20,14 @@ pub fn vscode_open(
     app: AppHandle,
 ) -> Result<(), String> {
     let host = state.find_host(&host_id)?;
-    vscode::open_folder_uri(&uri)?;
-    state.record_open(&host.id, "vscode", &label, &uri, "");
+    let result = vscode::open_history_for_host(&host, &uri)?;
+    state.record_open(&host.id, "vscode", &label, &result.uri, "");
     state.merge_vscode_history(&host.id, &host.ssh_host);
-    state.add_log("info", format!("[{}] vscode open {uri}", host.name), Some(&app));
+    state.add_log(
+        "info",
+        format!("[{}] vscode open {}", host.name, result.uri),
+        Some(&app),
+    );
     Ok(())
 }
 
